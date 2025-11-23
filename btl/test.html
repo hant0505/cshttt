@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BASS — Topics & Semantic Search (Right Panel)</title>
+<style>
+/* Basic layout: right-panel focused */
+body { font-family: "Segoe UI", Roboto, Arial; background:#fff; color:#222; margin:0; padding:20px; }
+.wrapper { display:flex; gap:20px; }
+/* Điều chỉnh left-placeholder để khớp với phong cách 'document viewer' trong ảnh */
+.left-placeholder { 
+  width:48%; 
+  background:#fff; 
+  border:1px solid #e2e6ea; 
+  padding:16px; 
+  border-radius:8px; 
+  min-height:600px; 
+  display: flex; /* Dùng flex để dễ dàng căn chỉnh nội dung */
+  flex-direction: column;
+}
+.right-panel { 
+  width:52%; 
+  background:#fff; 
+  border:1px solid #e2e6ea; 
+  padding:16px; 
+  border-radius:8px; 
+  min-height:600px; 
+  display:flex; 
+  flex-direction:column; 
+}
+
+h2 { margin:0 0 12px 0; font-size:18px; color:#2b3b4b; display: none; /* Ẩn tiêu đề mặc định */ }
+
+/* Chỉnh lại kiểu dáng để giống với ảnh */
+.controls { display:block; margin-bottom:12px; }
+.controls > div { margin-bottom: 10px; } /* Thêm khoảng cách cho các phần tử controls */
+.btn { padding:8px 12px; border-radius:4px; border:1px solid #ccc; background:#f0f0f0; cursor:pointer; font-size:14px; }
+.btn-primary { background:#f0f0f0; color:#333; border:1px solid #ccc; font-weight: 500;} /* Chỉnh lại màu cho View All Documents */
+
+.search-box { display:flex; gap:8px; align-items:center; }
+.search-box input { width:100%; padding:10px 12px; border:1px solid #d1dbe2; border-radius:4px; font-size:14px; }
+.search-box button { background: #f0f0f0; border: 1px solid #ccc; color: #333; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+
+
+/* Phần Topics và Summary Box */
+.topics-area { 
+    margin-bottom:12px; 
+    padding: 10px 15px; 
+    border: 1px solid #e2e6ea; 
+    border-radius: 8px; 
+    position: relative; /* Dùng để đặt vị trí cho các nút View Full Screen */
+}
+.topic-list { display:flex; flex-wrap:wrap; gap:8px; padding-top: 5px; }
+.topic-chip { 
+  padding:6px 10px; 
+  border-radius: 4px; /* Giảm độ bo góc */
+  background:#eef6fb; 
+  border:1px solid #cfeafc; 
+  cursor:pointer; 
+  position:relative; 
+  font-size: 13px;
+  font-weight: 600;
+  color: #333; /* Màu chữ mặc định */
+  display: flex;
+  align-items: center;
+  line-height: 1.2;
+}
+.topic-chip.active { 
+  background:#38c172; /* Màu xanh lá cây khi active */
+  color:#fff; 
+  border-color:#2d9d5d; 
+}
+.topic-chip .count { font-weight:500; margin-left:8px; font-size:12px; color:inherit; }
+
+/* Tooltip Summary Box: Thiết kế lại để khớp với hộp màu xanh lá cây trong ảnh */
+.tooltip { 
+  position:absolute; 
+  z-index:50; 
+  background: #38c172; /* Màu nền xanh lá cây */
+  color:#fff; 
+  padding:10px; 
+  border-radius:6px; 
+  font-size:13px; 
+  max-width:320px; 
+  box-shadow:0 6px 20px rgba(0,0,0,0.25); 
+  display:none; 
+  top: 100%; /* Đặt dưới chip */
+  left: 0;
+  margin-top: 8px;
+  border: 1px solid #2d9d5d;
+}
+.topic-chip:hover .tooltip { display:block; }
+.tooltip strong { font-size: 14px; }
+.tooltip .count { color: #d4f7e2; font-weight: 400; } 
+
+/* Màu sắc các label cụ thể (dựa trên ảnh) */
+[data-label="jewish community education support"] { background: #e07b4b; color: #fff; border-color: #c0653f; } /* Cam đậm */
+[data-label="bird immigrations"] { background: #ff6699; color: #fff; border-color: #e04b7b; } /* Hồng */
+[data-label="scientific research and discoveries"] { background: #38c172; color: #fff; border-color: #2d9d5d; } /* Xanh lá */
+[data-label="global impact of indian fashion"] { background: #e0ac00; color: #fff; border-color: #c09100; } /* Vàng đậm */
+[data-label="textile industry and culture"] { background: #7c5cff; color: #fff; border-color: #6444e0; } /* Tím */
+[data-label="booking"] { background: #e07b7b; color: #fff; border-color: #c06565; } /* Hồng nhạt */
+[data-label="american southern culture terms"] { background: #66ccff; color: #fff; border-color: #4bacd9; } /* Xanh dương */
+[data-label="draft pick"] { background: #ff66ff; color: #fff; border-color: #e04be0; } /* Magenta */
+
+
+/* documents table */
+.docs-area { flex:1; display:flex; flex-direction:column; gap:8px; }
+.docs-area > div:nth-child(2) { border: none !important; }
+
+.docs-table { width:100%; border-collapse:collapse; }
+.docs-table th, .docs-table td { text-align:left; padding:10px; border-bottom:1px solid #eef3f6; font-size:13px; }
+/* Thêm border xung quanh table và header */
+.docs-table { 
+  border: 1px solid #e2e6ea; 
+  border-radius: 4px; 
+  overflow: hidden; 
+}
+.docs-table thead th { 
+  background:#f6f9fb; 
+  font-weight:700; 
+  color:#1f3340; 
+  position:sticky; 
+  top:0; 
+  border-bottom: 1px solid #e2e6ea; 
+}
+
+.doc-preview { color:#6b7280; max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Điều chỉnh lại style của tag để trông giống hơn */
+.tag { display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; background:#f1f5f9; border:1px solid #e2e8f0; font-weight: 500;}
+.tag.pred { background:#eaf5ea; color:#1b7a2f; border-color:#c5e6c6; } /* Màu label Predicted */
+.status-unread { color:#c0392b; font-weight:600; }
+.status-read { color:#2d9cdb; font-weight:600; }
+
+.footer-actions { display:flex; gap:8px; align-items:center; margin-top:8px; }
+.small { font-size:12px; color:#6b7280; }
+
+/* responsive */
+@media (max-width:900px) { .wrapper { flex-direction:column; } .left-placeholder, .right-panel { width:100%; } }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="left-placeholder" id="leftPlaceholder">
+        <div style="font-size: 14px; line-height: 1.6;">
+            <div style="font-size: 10px; color: #888; margin-bottom: 15px;">Timer: 01:54:30</div>
+            <div style="margin-bottom: 15px;">
+                <div style="display: inline-block; padding: 5px 10px; background: #e0e0e0; border-radius: 4px; font-weight: bold; font-size: 12px;">Summary/Translation</div>
+                <button style="border: 1px solid #ccc; padding: 5px 10px; background: #f0f0f0; margin-left: 10px;">Previous</button>
+                <button style="border: 1px solid #ccc; padding: 5px 10px; background: #f0f0f0;">Next</button>
+            </div>
+            
+            <div style="border: 1px solid #ccc; padding: 15px; border-radius: 4px; background: #fcfcfc;">
+                Approved/generated topics are displayed in this box. Each topic has a short summary description of all the documents assigned by users for that topic.
+            </div>
+
+            <p>Okay, so there are a lot of conceptual collections out there. There's Etat Libre d'Orange, whose concept is hardcore, often brilliant, art-for-art's-sake, mercilessly-destroy-the-concept-of-traditional-perfume radicalism. There's Frédéric Malle, whose marvelous, admirable concept is the pushing to the foreground of individual artists — great perfumers with visions and talent — whom the house publishes as Knopf might publish great novelists</p>
+
+            <p>these are perfumes as more traditional scent, art that seduces through beauty. There's Biehl. Parfumkunstwerke, which is a happy medium: works by talented perfumers that are challenging yet wearable. Gwen Stefani's Takashi Murakami-style Harajuku collection is the Superflat of the perfume world, appropriating a Japanese pop-culture phenomenon and intentionally delivering fun kitsch pastiche. Parfums d'Empire imagines the scents of vanished empires, painting olfactory portraits in perfumes out of newly sour memories. And then there's **AI assistant might generate inaccurate information. Please use the suggestions below.**</p>
+
+            <div style="border: 1px solid red; padding: 10px; margin-top: 15px; border-radius: 4px;">
+                Select a label suggestion or manually enter their defined label
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button style="padding: 10px 15px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px;">perfume collections</button>
+                    <button style="padding: 10px 15px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px;">perfume concepts and brands</button>
+                    <button style="padding: 10px 15px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px;">consumer products and retail</button>
+                </div>
+                <input type="text" placeholder="Enter or select label" style="width: 100%; padding: 8px; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px;" />
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button style="padding: 10px 15px; border: 1px solid #007bff; background: #007bff; color: white; border-radius: 4px;">Add Label</button>
+                    <button style="padding: 10px 15px; border: 1px solid #dc3545; background: #dc3545; color: white; border-radius: 4px;">Remove Label</button>
+                    <button style="padding: 10px 15px; border: 1px solid #ffc107; background: #ffc107; color: black; border-radius: 4px;">Add Explanation (Optional)</button>
+                    <button style="padding: 10px 15px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 4px;">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="right-panel" id="rightPanel">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <button class="btn" style="background: #e0e0e0; color: #333; border: 1px solid #ccc;">View Labels Full Screen</button>
+            <button class="btn btn-primary" style="background: #d4e8f7; color: #2d9cdb; border: 1px solid #b3d9f9; font-weight: bold;">View-All-Documents</button>
+        </div>
+
+        <div class="topics-area">
+            <div class="topic-list" id="topicList">
+                </div>
+        </div>
+        
+        <div class="controls">
+            <div class="search-box">
+                <input id="searchInput" placeholder="Enter keywords to search relevant documents..." />
+            </div>
+            <div>
+                <button class="btn" id="btnClearSearch">Reset Filters</button>
+            </div>
+            </div>
+
+        <div class="docs-area">
+            <div style="margin-bottom: 5px;">
+                </div>
+
+            <div style="overflow:auto; height: 350px;">
+                <table class="docs-table" id="docsTable">
+                    <thead>
+                        <tr>
+                            <th style="width:60px">Documents (Truncated)</th>
+                            <th style="width:180px">Predicted Label</th>
+                            <th style="width:100px">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="docsTbody">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="footer-actions" style="justify-content: flex-end; margin-top: 15px;">
+                <div class="small" style="text-align: right;">A list of all the documents filtered by labels. Click the document to redirect to that document.</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+/*
+  BASS Right Panel demo script
+  - SAMPLE_DOCUMENTS: demo corpus
+  - Implement logic for topics and search
+*/
+
+/* --------- CONFIG --------- */
+const API_BASE = 'http://localhost:5000'; // backend (if running)
+let CURRENT_USER = 'demo_user'; // Khởi tạo user ID cố định cho demo
+
+/* --------- SAMPLE DATA (change as you like) --------- */
+const SAMPLE_DOCUMENTS = [
+  {id:0, text:"The influenza virus outbreak caused many infections in 2019."},
+  {id:1, text:"Stock market fluctuations are related to inflation and interest rates."},
+  {id:2, text:"Research on virus infection and public health measures to prevent outbreaks."},
+  {id:3, text:"The central bank adjusts interest rates to control inflation."},
+  {id:4, text:"New vaccine development improved immune response to viral infections."},
+  {id:5, text:"An article about cooking and recipes for healthy food."},
+  {id:6, text:"Investors worry about stock market bubbles and inflation fears."},
+  {id:7, text:"A scientific paper on virus transmission dynamics and case studies."},
+  {id:8, text:"Sports news: the local team won the tournament last night."},
+  {id:9, text:"Market analysis shows strong performance in technology stocks."},
+  {id:10, text:"Education policy reforms and classroom strategies for teachers."},
+  {id:11, text:"The museum exhibits historical fashion and textiles."},
+  {id:12, text:"Local outbreak investigation identified infection clusters."},
+  {id:13, text:"Economic measures to tackle inflation and support market growth."},
+  {id:14, text:"An opinion piece on environmental policy and green markets."},
+  {id:15, text:"Tutorial: How to use TF-IDF and cosine similarity for search."},
+  {id:16, text:"Healthcare workers study infection control protocols."},
+  {id:17, text:"Company earnings and stock market reactions after quarterly report."},
+  {id:18, text:"Travel blog discussing markets, food and local culture."},
+  {id:19, text:"Machine learning approaches to detect outbreaks from tweets."}
+];
+
+// Dữ liệu giả lập cho các Topics (Label) và Documents
+const INITIAL_LABELS = {
+    'scientific research and discoveries': new Set([0, 2, 4, 7, 16, 19]),
+    'american southern culture terms': new Set([10, 11, 18, 12]),
+    'jewish community education support': new Set([1, 3, 6, 9, 13, 17]),
+    'bird immigrations': new Set([5, 8]),
+    'global impact of indian fashion': new Set([14, 15]),
+    'textile industry and culture': new Set([1]),
+    'booking': new Set([3]),
+    'draft pick': new Set([17]),
+};
+
+// Dữ liệu giả lập cho Bảng Documents
+const FAKE_DOC_DATA = [
+    { id: 0, text: "National Transportation Safety Board...", predicted: 'american southern culture terms', status: 'Unread' },
+    { id: 1, text: "Assignment: Compare '1984' and 'B...", predicted: 'american southern culture terms', status: 'Unread' },
+    { id: 2, text: "Nine letters comment on Sept 7 and ...", predicted: 'american southern culture terms', status: 'Unread' },
+    { id: 3, text: "Assignment: Compare '1984' and 'B...", predicted: 'american southern culture terms', status: 'Unread' },
+];
+
+
+/* --------- state --------- */
+let documents = SAMPLE_DOCUMENTS.slice(); // corpus used in panel
+let tfidfModel = null; // {vocab: Map token->idx, idf:[], vectors: [Array] }
+let labeledMap = {};    // { docId: label }  // user-created labels (approved topics)
+let labeledDocsByLabel = INITIAL_LABELS; // Sử dụng dữ liệu giả lập cho demo
+let docStatus = {};     // { docId: 'Unread'|'Read' }
+let predictedLabels = {}; // { docId: predictedLabel OR null }
+
+
+// Khởi tạo các status và predicted labels dựa trên dữ liệu giả lập
+FAKE_DOC_DATA.forEach(d => {
+    docStatus[d.id] = d.status;
+    predictedLabels[d.id] = d.predicted;
+});
+
+
+/* --------- UTIL: tokenize & build TF-IDF (giữ nguyên logic search) --------- */
+function tokenize(text) {
+  // simple tokenizer: lowercase, remove non-alnum, split
+  return text.toLowerCase().replace(/[^\w\s]/g,' ').split(/\s+/).filter(Boolean);
+}
+
+function buildTfidf(docs) {
+    const vocab = new Map();
+    let termDocs = []; 
+    docs.forEach((d, i) => {
+        const tokens = tokenize(d.text);
+        const counts = new Map();
+        tokens.forEach(t => {
+            counts.set(t, (counts.get(t)||0)+1);
+            if(!vocab.has(t)) vocab.set(t, vocab.size);
+        });
+        termDocs.push(counts);
+    });
+
+    const V = vocab.size;
+    const N = docs.length;
+    const idf = new Array(V).fill(0);
+    vocab.forEach((idx, term) => {
+        let df = 0;
+        for (let i=0;i<N;i++) if (termDocs[i].has(term)) df++;
+        idf[idx] = Math.log((1 + N) / (1 + df)) + 1;
+    });
+
+    const vectors = [];
+    for (let i=0;i<N;i++) {
+        const vec = new Array(V).fill(0);
+        let norm = 0;
+        termDocs[i].forEach((cnt, term) => {
+            const idx = vocab.get(term);
+            const tf = 1 + Math.log(cnt);
+            const val = tf * idf[idx];
+            vec[idx] = val;
+            norm += val*val;
+        });
+        norm = Math.sqrt(norm) || 1.0;
+        for (let j=0;j<V;j++) vec[j] = vec[j]/norm;
+        vectors.push(vec);
+    }
+    return { vocab, idf, vectors };
+}
+
+function cosineVec(a,b) {
+  let s = 0;
+  for (let i=0;i<a.length;i++) s += (a[i]||0)*(b[i]||0);
+  return s;
+}
+
+/* --------- build model on load --------- */
+function initModel() {
+  tfidfModel = buildTfidf(documents);
+  documents.forEach(d => docStatus[d.id] = docStatus[d.id] || 'Unread');
+}
+
+/* --------- SEARCH using TF-IDF + cosine --------- */
+function semanticSearch(query, topK=50) {
+  if (!tfidfModel) initModel();
+  const tokens = tokenize(query);
+  const V = tfidfModel.vocab.size;
+  const qvec = new Array(V).fill(0);
+  const counts = {};
+  tokens.forEach(t => counts[t] = (counts[t]||0)+1);
+  for (const t in counts) {
+    if (!tfidfModel.vocab.has(t)) continue;
+    const idx = tfidfModel.vocab.get(t);
+    const tf = 1 + Math.log(counts[t]);
+    qvec[idx] = tf * tfidfModel.idf[idx];
+  }
+  let norm = Math.sqrt(qvec.reduce((s,v)=>s+v*v,0)) || 1.0;
+  for (let i=0;i<qvec.length;i++) qvec[i] /= norm;
+  const sims = tfidfModel.vectors.map((v,i)=>({id:documents[i].id, sim:cosineVec(v,qvec)}));
+  sims.sort((a,b)=>b.sim - a.sim);
+  return sims.slice(0,topK);
+}
+
+/* --------- TOPICS (user-created) handling --------- */
+function recalcTopics() {
+    // Với demo này, chúng ta không cần tính lại mà chỉ dùng dữ liệu giả lập
+    renderTopics(); 
+    renderDocsTable();
+}
+
+function topicSummary(label, topN=6) {
+    const ids = Array.from(labeledDocsByLabel[label]||[]);
+    const count = ids.length;
+    let terms = [];
+    if (label === 'scientific research and discoveries') {
+        terms = ['various scientific research studies', 'including bird migration', 'ethane on Titan', 'and competition among baby beeches'];
+    } else {
+        // Fallback or other summaries
+        if (count > 0) {
+            // Lấy 6 từ ngẫu nhiên từ các documents trong topic đó
+            const allTokens = ids.flatMap(id => {
+                const doc = documents.find(d => d.id === id);
+                return doc ? tokenize(doc.text) : [];
+            });
+            const uniqueTokens = Array.from(new Set(allTokens)).slice(0, topN);
+            terms = uniqueTokens;
+        }
+    }
+    return {count, terms};
+}
+
+/* --------- RENDERING --------- */
+let currentFilter = null;
+
+function renderTopics() {
+    const container = document.getElementById('topicList');
+    container.innerHTML = '';
+    
+    // Lấy các label key từ dữ liệu giả lập và sắp xếp để đảm bảo thứ tự
+    const labels = Object.keys(labeledDocsByLabel).sort((a,b)=> b.length - a.length);
+
+    // Filter ra các label không có doc nào
+    const filteredLabels = labels.filter(label => labeledDocsByLabel[label].size > 0);
+    
+    // Nếu không có label nào
+    if (filteredLabels.length === 0) {
+        container.innerHTML = '<div class="small" style="color:#6b7280">No user-created topics yet. Label docs on the left panel to create topics.</div>';
+        return;
+    }
+
+    filteredLabels.forEach(label=>{
+        const sum = topicSummary(label);
+        const chip = document.createElement('div');
+        chip.className = 'topic-chip';
+        // Thêm data-label để có thể áp dụng CSS màu sắc riêng
+        chip.setAttribute('data-label', label); 
+        
+        // Kích hoạt màu xanh lá cây cho chip 'scientific research and discoveries' (giống ảnh)
+        if (label === 'scientific research and discoveries') chip.classList.add('active');
+        
+        // Nội dung chip
+        chip.innerHTML = `<span>${label}</span> <span class="count">(${sum.count}%)</span>`;
+        
+        // tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        
+        // Lấy lại summary chuẩn giống ảnh
+        let summaryText = `SUMMARY: The document discusses various scientific research studies, including bird migration, ethane on Titan, and competition among baby beeches. These topics fall under the broader category of scientific research and discoveries.`;
+        
+        tooltip.innerHTML = `
+          <strong>${label}</strong>
+          <div style="font-size:13px; margin: 4px 0;">Documents: ${sum.count} (3.6%)</div>
+          <div style="margin-top:6px; font-size:12px; color:#fff;">${summaryText}</div>
+        `;
+        chip.appendChild(tooltip);
+
+        // Click -> filter toggle
+        chip.addEventListener('click', ()=> {
+            if (currentFilter===label) currentFilter=null; else currentFilter=label;
+            renderTopics();
+            renderDocsTable();
+            document.getElementById('activeFilter').textContent = currentFilter || 'None';
+        });
+        container.appendChild(chip);
+    });
+}
+
+/* render docs table */
+let currentRows = [];
+
+function renderDocsTable() {
+    const tbody = document.getElementById('docsTbody');
+    let rows = FAKE_DOC_DATA; // Dùng dữ liệu giả lập cố định cho bảng
+
+    // Áp dụng bộ lọc (giữ nguyên logic này nếu muốn)
+    const q = document.getElementById('searchInput').value.trim();
+    if (q.length>0) {
+        // Chỉ cần chạy search trên SAMPLE_DOCUMENTS và lọc ra các FAKE_DOC_DATA
+        const searchResults = semanticSearch(q, documents.length);
+        const searchIds = new Set(searchResults.map(s => s.id));
+        rows = rows.filter(d => searchIds.has(d.id));
+    }
+
+    // Áp dụng topic filter (giữ nguyên logic này nếu muốn)
+    if (currentFilter) {
+        const setIds = labeledDocsByLabel[currentFilter] || new Set();
+        rows = rows.filter(d=> setIds.has(d.id));
+    }
+
+    currentRows = rows;
+    tbody.innerHTML = '';
+    
+    // Chỉ hiển thị 4 dòng như trong ảnh
+    const displayRows = rows.slice(0, 4);
+
+    for (const doc of displayRows) {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', ()=> {
+            openDocumentInLeftPanel(doc.id);
+            docStatus[doc.id] = 'Read';
+            renderDocsTable(); // refresh status
+        });
+
+        // predicted label
+        let predLabel = predictedLabels[doc.id] || null;
+        let predHtml = predLabel ? `<span class="tag pred" style="background: #eaf5ea; color: #1b7a2f; border-color: #c5e6c6;">${predLabel}</span>` : `<span class="tag">-</span>`;
+
+        const preview = doc.text.length > 30 ? doc.text.slice(0, 30) + '...' : doc.text;
+        const statusHtml = docStatus[doc.id] === 'Unread' ? `<span class="status-unread">Unread</span>` : `<span class="status-read">Read</span>`;
+
+        tr.innerHTML = `
+            <td class="doc-preview">${escapeHtml(preview)}</td>
+            <td>${predHtml}</td>
+            <td>${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
+
+/* --------- helper: open doc in left panel (demo) --------- */
+function openDocumentInLeftPanel(docId) {
+  const doc = documents.find(d=>d.id===docId);
+  const el = document.getElementById('leftDocView');
+  if (doc) {
+    // Cập nhật nội dung placeholder bên trái (giữ nguyên)
+    docStatus[doc.id] = 'Read';
+    renderDocsTable();
+  }
+}
+
+
+/* --------- UI wiring --------- */
+document.getElementById('btnClearSearch').addEventListener('click', ()=>{
+  document.getElementById('searchInput').value='';
+  renderDocsTable();
+});
+
+document.getElementById('searchInput').addEventListener('input', ()=>{
+  // small debounce
+  clearTimeout(window._searchDeb);
+  window._searchDeb = setTimeout(()=>renderDocsTable(), 200);
+});
+
+// document.getElementById('btnCreateUser').addEventListener('click', async ()=>{
+//   // Removed logic for simplicity
+// });
+
+/* small toast */
+function showToast(msg, isError=false) {
+  const el = document.createElement('div');
+  el.style.position='fixed';
+  el.style.right='20px';
+  el.style.bottom='20px';
+  el.style.padding='10px 14px';
+  el.style.background=isError? '#fce9e9' : '#e6f6ff';
+  el.style.border=isError? '1px solid #f2b4b4' : '1px solid #bfe8ff';
+  el.style.borderRadius='8px';
+  el.style.zIndex=9999;
+  el.innerText = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 3000);
+}
+
+/* escape */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c])); }
+
+/* --------- initialization --------- */
+initModel();
+renderTopics();
+renderDocsTable();
+
+/* Expose some functions to global so left panel can call them:
+   - onDocumentLabeled(docId, label)  // call when a label is created by user on left
+   - openDocumentInLeftPanel(docId)   // open doc (already defined)
+*/
+window.onDocumentLabeled = (docId, label) => {
+    // Logic giả lập khi có label mới được tạo
+    console.log(`Labeled doc ${docId} with ${label}`);
+    recalcTopics();
+};
+window.openDocumentInLeftPanel = openDocumentInLeftPanel;
+
+</script>
+
+</body>
+</html>

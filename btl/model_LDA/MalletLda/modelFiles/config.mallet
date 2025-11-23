@@ -1,0 +1,14 @@
+input = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/corpus.mallet
+num-topics = 83
+alpha = 5.0
+optimize-interval = 10
+num-threads = 4
+num-iterations = 1000
+doc-topics-threshold = 0.0
+output-state = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/topic-state.gz
+output-doc-topics = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/doc-topics.txt
+word-topic-counts-file = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/word-topic-counts.txt
+diagnostics-file = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/diagnostics.xml 
+xml-topic-report = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/topic-report.xml
+output-topic-keys = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/topickeys.txt
+inferencer-filename = /fs/nexus-scratch/zli12321/TopicModelLLM/Models/Bills/modelFiles/inferencer.mallet
