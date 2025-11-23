@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BASS — Topics & Semantic Search (Active Learning Integrated)</title>
+<style>
+/* *** Giữ nguyên CSS từ phiên bản trước (đã tối ưu giao diện theo ảnh) ***
+*/
+body { font-family: "Segoe UI", Roboto, Arial; background:#fff; color:#222; margin:0; padding:20px; }
+.wrapper { display:flex; gap:20px; }
+.left-placeholder { 
+  width:48%; 
+  background:#fff; 
+  border:1px solid #e2e6ea; 
+  padding:16px; 
+  border-radius:8px; 
+  min-height:600px; 
+  display: flex; 
+  flex-direction: column;
+}
+.right-panel { 
+  width:52%; 
+  background:#fff; 
+  border:1px solid #e2e6ea; 
+  padding:16px; 
+  border-radius:8px; 
+  min-height:600px; 
+  display:flex; 
+  flex-direction:column; 
+}
+
+h2 { margin:0 0 12px 0; font-size:18px; color:#2b3b4b; display: none; } 
+.controls { display:block; margin-bottom:12px; }
+.controls > div { margin-bottom: 10px; } 
+.btn { padding:8px 12px; border-radius:4px; border:1px solid #ccc; background:#f0f0f0; cursor:pointer; font-size:14px; transition: background 0.2s; }
+.btn:hover:not(:disabled) { background: #e0e0e0; }
+.btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.btn-primary { background:#d4e8f7; color:#2d9cdb; border:1px solid #b3d9f9; font-weight: bold;} 
+.search-box { display:flex; gap:8px; align-items:center; }
+.search-box input { width:100%; padding:10px 12px; border:1px solid #d1dbe2; border-radius:4px; font-size:14px; }
+.search-box button { background: #f0f0f0; border: 1px solid #ccc; color: #333; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+
+
+.topics-area { 
+    margin-bottom:12px; 
+    padding: 10px 15px; 
+    border: 1px solid #e2e6ea; 
+    border-radius: 8px; 
+    position: relative; 
+}
+.topic-list { display:flex; flex-wrap:wrap; gap:8px; padding-top: 5px; min-height: 20px;}
+.topic-chip { 
+  padding:6px 10px; 
+  border-radius: 4px; 
+  background:#eef6fb; 
+  border:1px solid #cfeafc; 
+  cursor:pointer; 
+  position:relative; 
+  font-size: 13px;
+  font-weight: 600;
+  color: #333; 
+  display: flex;
+  align-items: center;
+  line-height: 1.2;
+}
+.topic-chip.active { 
+  background:#38c172; 
+  color:#fff; 
+  border-color:#2d9d5d; 
+}
+.topic-chip .count { font-weight:500; margin-left:8px; font-size:12px; color:inherit; }
+
+.tooltip { 
+  position:absolute; 
+  z-index:50; 
+  background: #38c172; 
+  color:#fff; 
+  padding:10px; 
+  border-radius:6px; 
+  font-size:13px; 
+  max-width:320px; 
+  box-shadow:0 6px 20px rgba(0,0,0,0.25); 
+  display:none; 
+  top: 100%; 
+  left: 0;
+  margin-top: 8px;
+  border: 1px solid #2d9d5d;
+}
+.topic-chip:hover .tooltip { display:block; }
+.tooltip strong { font-size: 14px; }
+.tooltip .count { color: #d4f7e2; font-weight: 400; } 
+
+
+.docs-area { flex:1; display:flex; flex-direction:column; gap:8px; }
+.docs-area > div:nth-child(2) { border: none !important; }
+
+.docs-table { width:100%; border-collapse:collapse; }
+.docs-table th, .docs-table td { text-align:left; padding:10px; border-bottom:1px solid #eef3f6; font-size:13px; }
+.docs-table { 
+  border: 1px solid #e2e6ea; 
+  border-radius: 4px; 
+  overflow: hidden; 
+}
+.docs-table thead th { 
+  background:#f6f9fb; 
+  font-weight:700; 
+  color:#1f3340; 
+  position:sticky; 
+  top:0; 
+  border-bottom: 1px solid #e2e6ea; 
+}
+
+.doc-preview { color:#6b7280; max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.tag { display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; background:#f1f5f9; border:1px solid #e2e8f0; font-weight: 500;}
+.tag.pred { background:#eaf5ea; color:#1b7a2f; border-color:#c5e6c6; } 
+.status-unread { color:#c0392b; font-weight:600; }
+.status-read { color:#2d9cdb; font-weight:600; }
+
+.footer-actions { display:flex; gap:8px; align-items:center; margin-top:8px; }
+.small { font-size:12px; color:#6b7280; }
+
+@media (max-width:900px) { .wrapper { flex-direction:column; } .left-placeholder, .right-panel { width:100%; } }
+
+/* CSS cho Left Panel (Doc Viewer) */
+.doc-viewer-container {
+    font-size: 14px; line-height: 1.6;
+}
+.doc-controls {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+}
+.doc-controls button {
+    border: 1px solid #ccc; padding: 5px 10px; background: #f0f0f0; margin-left: 10px; border-radius: 4px; cursor: pointer;
+}
+.summary-box {
+    border: 1px solid #ccc; padding: 15px; border-radius: 4px; background: #fcfcfc; margin-bottom: 15px;
+}
+.label-suggestion-area {
+    border: 1px solid #dc3545; /* Màu đỏ cho vùng cần label */
+    padding: 10px; 
+    margin-top: 15px; 
+    border-radius: 4px;
+}
+.llm-suggestions {
+    display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;
+}
+.llm-suggestions button {
+    padding: 8px 12px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.label-input {
+    width: 100%; padding: 8px; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px;
+}
+.label-actions {
+    display: flex; gap: 10px; margin-top: 10px;
+}
+</style>
+</head>
+<body onload="initApp()">
+
+<div class="wrapper">
+    <div class="left-placeholder">
+        <div class="doc-viewer-container">
+            <div class="doc-controls">
+                <div style="font-size: 12px; color: #888;">
+                    Timer: <span id="timerDisplay">00:00:00</span> | Docs Labeled: <span id="labeledCount">0</span>
+                </div>
+                <div>
+                    <button id="btnBackDoc" disabled>Previous</button>
+                    <button id="btnNextDoc">Next/Skip</button>
+                </div>
+            </div>
+            
+            <div id="statusMessage" style="color: red; margin-bottom: 10px; font-weight: bold;">Click "Connect Session" to start.</div>
+
+            <div class="summary-box">
+                <div style="font-weight: bold;">Document Summary:</div>
+                <div id="docSummaryText">Awaiting document...</div>
+            </div>
+            
+            <p id="docContentText" style="min-height: 250px;">
+                ... Document text will appear here. ...
+            </p>
+
+            <div class="label-suggestion-area">
+                <div style="font-weight: bold; margin-bottom: 5px;">
+                    Select or Enter Label:
+                    <span style="font-size: 12px; font-weight: normal; color: #dc3545;">
+                        (Current Doc ID: <span id="currentDocId">-</span>)
+                    </span>
+                </div>
+                <div class="llm-suggestions" id="llmSuggestionsArea">
+                    </div>
+                
+                <input type="text" id="manualLabelInput" placeholder="Enter or select label" class="label-input" />
+
+                <div class="label-actions">
+                    <button style="padding: 10px 15px; border: 1px solid #007bff; background: #007bff; color: white; border-radius: 4px;" id="btnAddLabel">Submit Label</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <button class="btn" id="btnConnectSession">Connect Session (User ID: <span id="userIdDisplay">N/A</span>)</button>
+            <button class="btn btn-primary" id="btnViewAllDocs">View-All-Documents</button>
+        </div>
+        
+        <div class="topics-area">
+            <div style="font-weight: bold; margin-bottom: 5px; color: #2b3b4b;">User-Approved Topics (<span id="totalTopics">0</span>)</div>
+            <div class="topic-list" id="topicList">
+                <div class="small" style="color:#6b7280">Label 2 documents with unique topics to start classification.</div>
+            </div>
+            <div style="font-size: 12px; color: #007bff; margin-top: 5px;">Purity: <span id="metricPurity">N/A</span> | ARI: <span id="metricARI">N/A</span> | NMI: <span id="metricNMI">N/A</span></div>
+        </div>
+        
+        <div class="controls">
+            <div class="search-box">
+                <input id="searchInput" placeholder="Enter keywords to search relevant documents (Local TF-IDF search)" />
+            </div>
+            <div>
+                <button class="btn" id="btnClearSearch">Reset Filters</button>
+            </div>
+        </div>
+
+        <div class="docs-area">
+            <div style="overflow:auto; height: 350px;">
+                <table class="docs-table" id="docsTable">
+                    <thead>
+                        <tr>
+                            <th style="width:60px">Doc ID</th>
+                            <th style="width:180px">Predicted Label (Top 1)</th>
+                            <th style="width:100px">Uncertainty</th>
+                        </tr>
+                    </thead>
+                    <tbody id="docsTbody">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="footer-actions" style="justify-content: flex-end; margin-top: 15px;">
+                <div class="small" style="text-align: right;">This table shows the most uncertain (Active Learning) docs and model predictions.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/*   *** LOGIC INTERACTION VỚI BACKEND ENHANCED ACTIVE LEARNING ***
+*/
+
+const API_BASE = 'http://localhost:5000'; // Đảm bảo Flask chạy trên cổng 5000
+
+let CURRENT_USER_ID = null;
+let CURRENT_DOC_ID = null;
+let LABELED_DOCS = {}; 
+let TOPIC_DATA = {};
+let ALL_DOC_PREDICTIONS = []; 
+let LOCAL_DOCS_CACHE = {}; 
+
+/* --------- UI UTILS --------- */
+
+// Bật/tắt trạng thái tương tác của các nút
+function setInteractivity(isEnabled) {
+    document.getElementById('btnAddLabel').disabled = !isEnabled;
+    document.getElementById('btnNextDoc').disabled = !isEnabled;
+    document.getElementById('btnBackDoc').disabled = !isEnabled;
+}
+
+// Hiển thị thông báo Toast
+function showToast(msg, isError=false) {
+    const el = document.createElement('div');
+    el.style.position='fixed';
+    el.style.right='20px';
+    el.style.bottom='20px';
+    el.style.padding='10px 14px';
+    el.style.background=isError? '#fce9e9' : '#e6f6ff';
+    el.style.border=isError? '1px solid #f2b4b4' : '1px solid #bfe8ff';
+    el.style.borderRadius='8px';
+    el.style.zIndex=9999;
+    el.innerText = msg;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 3000);
+}
+
+// Cập nhật giao diện Doc Viewer
+function updateDocViewer(docId, text, summary, suggestions) {
+    CURRENT_DOC_ID = docId;
+    document.getElementById('currentDocId').textContent = docId;
+    document.getElementById('docContentText').textContent = text;
+    document.getElementById('docSummaryText').textContent = summary || 'No summary available.';
+    document.getElementById('manualLabelInput').value = '';
+    
+    const suggestionsArea = document.getElementById('llmSuggestionsArea');
+    suggestionsArea.innerHTML = '';
+    
+    // Nút gợi ý từ LLM
+    if (suggestions && suggestions.length > 0) {
+        suggestions.forEach(s => {
+            const btn = document.createElement('button');
+            btn.textContent = s.label;
+            btn.title = `Confidence: ${s.confidence.toFixed(2)}`;
+            btn.onclick = () => {
+                document.getElementById('manualLabelInput').value = s.label;
+            };
+            suggestionsArea.appendChild(btn);
+        });
+    } else {
+        suggestionsArea.innerHTML = '<div class="small" style="color:#6b7280;">No LLM suggestions available yet.</div>';
+    }
+}
+
+// Cập nhật danh sách Topics (bên phải)
+function renderTopics() {
+    const container = document.getElementById('topicList');
+    container.innerHTML = '';
+    const topics = Object.keys(TOPIC_DATA).sort();
+    const totalCount = parseInt(document.getElementById('labeledCount').textContent);
+
+    if (topics.length === 0) {
+        container.innerHTML = '<div class="small" style="color:#6b7280;">Label 2 documents with unique topics to start classification.</div>';
+        document.getElementById('totalTopics').textContent = 0;
+        return;
+    }
+
+    topics.forEach(label => {
+        const count = TOPIC_DATA[label] || 0;
+        const percentage = totalCount > 0 ? (count / totalCount * 100).toFixed(1) : 0;
+
+        const chip = document.createElement('div');
+        chip.className = 'topic-chip';
+        // chip.setAttribute('data-label', label); // Có thể dùng để gán màu sắc tùy chỉnh
+        
+        chip.innerHTML = `<span>${label}</span> <span class="count">(${count})</span>`;
+        
+        // Tooltip Summary (Sử dụng dữ liệu giả lập cho demo)
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        tooltip.innerHTML = `
+          <strong>${label}</strong>
+          <div style="font-size:13px; margin: 4px 0;">Documents: ${count} (${percentage}%)</div>
+          <div style="margin-top:6px; font-size:12px; color:#fff;">Topic summary will be generated by LLM when API is fully implemented.</div>
+        `;
+        chip.appendChild(tooltip);
+
+        container.appendChild(chip);
+    });
+    document.getElementById('totalTopics').textContent = topics.length;
+}
+
+// Cập nhật bảng Documents (Predicted, Uncertainty)
+function renderDocsTable() {
+    const tbody = document.getElementById('docsTbody');
+    tbody.innerHTML = '';
+    
+    // Nếu chưa có predictions (chưa đủ 2 classes), không hiển thị gì
+    if (ALL_DOC_PREDICTIONS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">Model requires at least 2 unique labels to start predicting.</td></tr>`;
+        return;
+    }
+
+    // Hiển thị 10 tài liệu có độ bất định cao nhất
+    const displayRows = ALL_DOC_PREDICTIONS.slice(0, 10); 
+
+    displayRows.forEach(doc => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        
+        const predictedLabel = doc.prediction ? doc.prediction[0] : '-';
+        const uncertainty = doc.prediction ? doc.uncertainty.toFixed(4) : '-';
+        
+        const predHtml = predictedLabel !== '-' ? `<span class="tag pred">${predictedLabel}</span>` : `<span class="tag">-</span>`;
+        const uncHtml = `<span style="font-weight: bold; color: ${doc.uncertainty > 0.6 ? '#c0392b' : doc.uncertainty > 0.3 ? '#f39c12' : '#27ae60'};">${uncertainty}</span>`;
+
+        tr.innerHTML = `
+            <td>${doc.doc_id}</td>
+            <td>${predHtml}</td>
+            <td>${uncHtml}</td>
+        `;
+        tr.onclick = () => openDocumentInLeftPanel(doc.doc_id);
+        tbody.appendChild(tr);
+    });
+}
+
+// Cập nhật Metrics
+function updateMetrics(metrics) {
+    document.getElementById('metricPurity').textContent = metrics.purity !== null ? metrics.purity.toFixed(3) : 'N/A';
+    document.getElementById('metricARI').textContent = metrics.ari !== null ? metrics.ari.toFixed(3) : 'N/A';
+    document.getElementById('metricNMI').textContent = metrics.nmi !== null ? metrics.nmi.toFixed(3) : 'N/A';
+}
+
+/* --------- API CALLS (CORE LOGIC) --------- */
+
+// 1. Tạo Session mới và lấy doc đầu tiên
+async function createNewSession() {
+    setInteractivity(false);
+    document.getElementById('statusMessage').textContent = 'Connecting...';
+    try {
+        const response = await fetch(`${API_BASE}/create_user`, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            CURRENT_USER_ID = data.user_id;
+            document.getElementById('userIdDisplay').textContent = CURRENT_USER_ID;
+            document.getElementById('statusMessage').textContent = `Session connected. Total docs: ${data.total_documents}`;
+            showToast(`Session ID: ${CURRENT_USER_ID}. Getting first document.`);
+            
+            // Lấy doc đầu tiên
+            await getRecommendedDocument();
+            
+            // Bật lại các nút
+            setInteractivity(true);
+            
+            // Tải full prediction/topic để fill bảng bên phải
+            await fetchDisplayData(); 
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        document.getElementById('statusMessage').textContent = `Error: Cannot connect to backend. (${error.message})`;
+        showToast('Error connecting to backend.', true);
+        setInteractivity(false);
+    }
+}
+
+// 2. Lấy Document đề xuất tiếp theo (Active Learning)
+async function getRecommendedDocument() {
+    if (!CURRENT_USER_ID) return;
+    setInteractivity(false);
+    document.getElementById('statusMessage').textContent = 'Fetching recommended document...';
+
+    try {
+        const response = await fetch(`${API_BASE}/get_recommended_document?user_id=${CURRENT_USER_ID}`);
+        const data = await response.json();
+
+        if (data.status === 'success' && data.doc_id !== undefined) {
+            const docId = data.doc_id;
+            const docText = data.text;
+            const entropy = data.entropy_score !== null ? data.entropy_score.toFixed(4) : 'N/A (Random)';
+            
+            // Cache doc text
+            LOCAL_DOCS_CACHE[docId] = docText;
+
+            // Lấy thông tin LLM gợi ý (Doc Info)
+            const infoResponse = await fetch(`${API_BASE}/get_document_information?user_id=${CURRENT_USER_ID}&doc_id=${docId}`);
+            const infoData = await infoResponse.json();
+
+            if (infoData.status === 'success') {
+                updateDocViewer(docId, docText, infoData.summary, infoData.suggestions);
+                document.getElementById('statusMessage').textContent = `New Doc ID: ${docId} | AL Score: ${entropy}`;
+            } else {
+                // Fallback nếu LLM info lỗi
+                updateDocViewer(docId, docText, 'LLM summary failed.', []);
+                document.getElementById('statusMessage').textContent = `New Doc ID: ${docId} | AL Score: ${entropy} (LLM info failed)`;
+            }
+
+        } else {
+            updateDocViewer('N/A', 'No more documents to label.', 'N/A', []);
+            document.getElementById('statusMessage').textContent = 'All documents labeled or skipped.';
+        }
+    } catch (error) {
+        document.getElementById('statusMessage').textContent = `Error fetching document: ${error.message}`;
+        showToast('Error fetching document.', true);
+    } finally {
+        setInteractivity(true);
+    }
+}
+
+// 3. Label Document và tự động lấy doc tiếp theo (Hành động chính)
+async function labelAndGetNextDoc() {
+    if (!CURRENT_USER_ID || CURRENT_DOC_ID === null) return;
+
+    const label = document.getElementById('manualLabelInput').value.trim();
+    if (label === '') {
+        showToast('Please enter a label.', true);
+        return;
+    }
+    
+    setInteractivity(false);
+    document.getElementById('statusMessage').textContent = `Submitting label "${label}" for Doc ID ${CURRENT_DOC_ID}...`;
+
+    try {
+        const response = await fetch(`${API_BASE}/recommend_document`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: CURRENT_USER_ID,
+                doc_id: CURRENT_DOC_ID,
+                label: label
+            })
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            document.getElementById('labeledCount').textContent = data.labeled_count;
+            showToast(`Labeled doc ${data.labeled} as "${label}".`);
+            
+            // Cập nhật giao diện bên phải (Topics & Predictions)
+            await fetchDisplayData();
+
+            // Hiển thị doc tiếp theo (next_doc_id, next_text)
+            const nextDocId = data.next_doc_id;
+            const nextDocText = data.next_text;
+            const entropy = data.entropy_score !== null ? data.entropy_score.toFixed(4) : 'N/A (Random)';
+
+            // Cache doc text
+            LOCAL_DOCS_CACHE[nextDocId] = nextDocText;
+
+            // Lấy thông tin LLM gợi ý cho doc mới
+            const infoResponse = await fetch(`${API_BASE}/get_document_information?user_id=${CURRENT_USER_ID}&doc_id=${nextDocId}`);
+            const infoData = await infoResponse.json();
+
+            if (infoData.status === 'success') {
+                updateDocViewer(nextDocId, nextDocText, infoData.summary, infoData.suggestions);
+                document.getElementById('statusMessage').textContent = `New Doc ID: ${nextDocId} | AL Score: ${entropy}`;
+            } else {
+                 updateDocViewer(nextDocId, nextDocText, 'LLM summary failed.', []);
+                 document.getElementById('statusMessage').textContent = `New Doc ID: ${nextDocId} | AL Score: ${entropy} (LLM info failed)`;
+            }
+
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        document.getElementById('statusMessage').textContent = `Error labeling: ${error.message}`;
+        showToast(`Error: ${error.message}`, true);
+    } finally {
+        setInteractivity(true);
+    }
+}
+
+// 4. Lấy toàn bộ dữ liệu hiển thị (Topics, Predictions, Metrics)
+async function fetchDisplayData() {
+    if (!CURRENT_USER_ID) return;
+
+    // Fetch Topics
+    const topicResponse = await fetch(`${API_BASE}/get_topic_list?user_id=${CURRENT_USER_ID}`);
+    const topicData = await topicResponse.json();
+    if (topicData.status === 'success') {
+        TOPIC_DATA = topicData.topic_counts;
+        renderTopics();
+    }
+
+    // Fetch All Predictions & Metrics
+    const displayResponse = await fetch(`${API_BASE}/display?user_id=${CURRENT_USER_ID}`);
+    const displayData = await displayResponse.json();
+    if (displayData.status === 'success') {
+        // Cập nhật Metrics
+        updateMetrics(displayData.metrics);
+
+        // Lưu Predictions (Cần 1 endpoint khác để lấy full predictions/uncertainty)
+        // Hiện tại, API `display` không trả về full list predictions/uncertainty,
+        // nên chúng ta sẽ tạo dữ liệu giả lập TẠM THỜI cho bảng:
+        
+        // --- START FAKE DATA FOR TABLE ---
+        const totalDocs = 14999; // Giả sử tổng số doc
+        ALL_DOC_PREDICTIONS = [];
+        const classes = displayData.topics;
+        const classCount = classes.length;
+
+        // Chỉ tạo fake data nếu có classes
+        if (classCount >= 2) {
+            for (let i = 0; i < totalDocs; i++) {
+                const label = classes[i % classCount];
+                const uncertainty = i === CURRENT_DOC_ID ? 0.95 : Math.random(); // Giả lập độ bất định
+                ALL_DOC_PREDICTIONS.push({
+                    doc_id: i,
+                    prediction: [label, Math.random()], // [label, confidence]
+                    uncertainty: uncertainty
+                });
+            }
+            // Sắp xếp theo uncertainty (Active Learning)
+            ALL_DOC_PREDICTIONS.sort((a, b) => b.uncertainty - a.uncertainty);
+        }
+        // --- END FAKE DATA FOR TABLE ---
+        
+        renderDocsTable();
+
+    }
+}
+
+// 5. Mở Document từ bảng bên phải (để xem/sửa)
+async function openDocumentInLeftPanel(docId) {
+    if (!CURRENT_USER_ID) return;
+    
+    let docText = LOCAL_DOCS_CACHE[docId];
+    if (!docText) {
+         // Nếu doc text chưa có trong cache, cần 1 endpoint để lấy doc text theo ID.
+         // Hiện tại, chúng ta sẽ giả định doc text đã được lấy.
+         showToast('Document text not cached. Cannot open.', true);
+         return;
+    }
+
+    // Lấy thông tin LLM gợi ý (Doc Info)
+    const infoResponse = await fetch(`${API_BASE}/get_document_information?user_id=${CURRENT_USER_ID}&doc_id=${docId}`);
+    const infoData = await infoResponse.json();
+
+    if (infoData.status === 'success') {
+        updateDocViewer(docId, docText, infoData.summary, infoData.suggestions);
+        document.getElementById('statusMessage').textContent = `Viewing Doc ID: ${docId}. You can re-label if needed.`;
+    }
+}
+
+// 6. Xử lý nút Next/Skip
+async function skipAndGetNextDoc() {
+    if (!CURRENT_USER_ID || CURRENT_DOC_ID === null) return;
+    setInteractivity(false);
+    
+    // Gửi yêu cầu skip
+    await fetch(`${API_BASE}/skip_document`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: CURRENT_USER_ID, doc_id: CURRENT_DOC_ID })
+    });
+    
+    showToast(`Skipped Doc ID ${CURRENT_DOC_ID}. Getting next document.`);
+
+    // Lấy doc tiếp theo
+    await getRecommendedDocument();
+    
+    setInteractivity(true);
+}
+
+
+/* --------- EVENT LISTENERS & INIT --------- */
+function initApp() {
+    // 1. Nút Connect/Create Session
+    document.getElementById('btnConnectSession').addEventListener('click', createNewSession);
+
+    // 2. Nút Submit Label (Chức năng chính)
+    document.getElementById('btnAddLabel').addEventListener('click', labelAndGetNextDoc);
+    
+    // 3. Nút Next/Skip (Gọi skip và lấy doc tiếp theo)
+    document.getElementById('btnNextDoc').addEventListener('click', skipAndGetNextDoc);
+    
+    // 4. Nút Back Doc (Quay lại)
+    document.getElementById('btnBackDoc').addEventListener('click', async () => {
+        if (!CURRENT_USER_ID) return;
+        try {
+            const response = await fetch(`${API_BASE}/back_document`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ user_id: CURRENT_USER_ID }) 
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                 showToast('Reverted last label.');
+                 document.getElementById('labeledCount').textContent = data.labeled_count;
+                 await fetchDisplayData();
+                 // Sau khi back, cần 1 logic để quay lại doc trước đó (chưa có trong API hiện tại)
+            } else {
+                 showToast(data.message, true);
+            }
+        } catch (error) {
+            showToast('Error reverting label.', true);
+        }
+    });
+
+    // 5. Nút View All Docs (Tải lại toàn bộ dữ liệu bên phải)
+    document.getElementById('btnViewAllDocs').addEventListener('click', fetchDisplayData);
+    
+    // Khởi tạo trạng thái ban đầu
+    setInteractivity(false);
+    document.getElementById('btnConnectSession').disabled = false;
+}
+
+</script>
+</body>
+</html>

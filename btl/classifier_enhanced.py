@@ -12,7 +12,7 @@ from sklearn.metrics import adjusted_rand_score
 from sklearn.metrics.cluster import normalized_mutual_info_score
 import random
 from sklearn.decomposition import PCA
-
+from sklearn.linear_model import SGDClassifier
 
 def purity_score(y_true, y_pred):
     """Compute purity score."""
@@ -144,11 +144,13 @@ class EnhancedActiveLearning:
         x_train = np.array(self.labeled_x)
         y_train = np.array(self.labeled_y)
         
-        self.classifier = LogisticRegression(
-            max_iter=200,
-            random_state=42,
-            multi_class='multinomial'
+        # ALWAYS rebuild classifier (fixed)
+        self.classifier = SGDClassifier(
+            loss="log_loss",
+            max_iter=2000,
+            random_state=42
         )
+        # Fit full dataset (NOT partial_fit)
         self.classifier.fit(x_train, y_train)
     
     def get_predictions(self, doc_id, top_k=3):
