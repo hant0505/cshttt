@@ -1,665 +1,521 @@
 <!doctype html>
 <html lang="vi">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>BASS — Topics & Semantic Search (Integrated Panel)</title>
-<style>
-/* Basic layout: right-panel focused */
-body { font-family: "Segoe UI", Roboto, Arial; background:#fff; color:#222; margin:0; padding:20px; }
-.wrapper { display:flex; gap:20px; }
-/* Điều chỉnh left-placeholder để khớp với phong cách 'document viewer' trong ảnh */
-.left-placeholder { 
-  width:48%; 
-  background:#fff; 
-  border:1px solid #e2e6ea; 
-  padding:16px; 
-  border-radius:8px; 
-  min-height:600px; 
-  display: flex; /* Dùng flex để dễ dàng căn chỉnh nội dung */
-  flex-direction: column;
-}
-.right-panel { 
-  width:52%; 
-  background:#fff; 
-  border:1px solid #e2e6ea; 
-  padding:16px; 
-  border-radius:8px; 
-  min-height:600px; 
-  display:flex; 
-  flex-direction:column; 
-}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Active Labeling UI — Frontend kết nối Flask</title>
+  <style>
+    /* ---------- layout ---------- */
+    :root { --bg:#f6f7fb; --card:#fff; --muted:#6b7280; --accent:#6ee7b7; --accent-2:#7dd3fc; }
+    body { margin:0; font-family: Inter, Roboto, Arial, sans-serif; background:var(--bg); color:#111827; }
+    .app { display:flex; gap:18px; padding:18px; height:100vh; box-sizing:border-box; }
 
-h2 { margin:0 0 12px 0; font-size:18px; color:#2b3b4b; display: none; /* Ẩn tiêu đề mặc định */ }
+    /* left column: document viewer */
+    .left { width:58%; min-width:560px; display:flex; flex-direction:column; gap:12px; }
+    .card { background:var(--card); border-radius:10px; box-shadow:0 6px 18px rgba(15,23,42,0.06); padding:16px; }
+    .doc-header { display:flex; align-items:center; gap:12px; justify-content:space-between; }
+    .doc-title { font-weight:700; font-size:18px; }
+    .doc-meta { color:var(--muted); font-size:13px; }
 
-/* Chỉnh lại kiểu dáng để giống với ảnh */
-.controls { display:block; margin-bottom:12px; }
-.controls > div { margin-bottom: 10px; } /* Thêm khoảng cách cho các phần tử controls */
-.btn { padding:8px 12px; border-radius:4px; border:1px solid #ccc; background:#f0f0f0; cursor:pointer; font-size:14px; }
-.btn-primary { background:#d4e8f7; color: #2d9cdb; border: 1px solid #b3d9f9; font-weight: bold;} /* Chỉnh lại màu cho View All Documents */
+    .doc-body { height: calc(100vh - 230px); overflow:auto; padding-right:8px; line-height:1.6; white-space:pre-wrap; }
 
-.search-box { display:flex; gap:8px; align-items:center; }
-.search-box input { width:100%; padding:10px 12px; border:1px solid #d1dbe2; border-radius:4px; font-size:14px; }
-.search-box button { background: #f0f0f0; border: 1px solid #ccc; color: #333; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    .label-suggestions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .chip { padding:8px 12px; border-radius:999px; background:#f3f4f6; cursor:pointer; user-select:none; font-size:14px; }
+    .chip.suggest { background:#e6fffa; border:1px solid #c7f9e7; }
+    .chip.added { background:#10b981; color:white; }
 
+    .controls { display:flex; gap:8px; margin-top:12px; }
 
-/* Phần Topics và Summary Box */
-.topics-area { 
-    margin-bottom:12px; 
-    padding: 10px 15px; 
-    border: 1px solid #e2e6ea; 
-    border-radius: 8px; 
-    position: relative; /* Dùng để đặt vị trí cho các nút View Full Screen */
-}
-.topic-list { display:flex; flex-wrap:wrap; gap:8px; padding-top: 5px; }
-.topic-chip { 
-  padding:6px 10px; 
-  border-radius: 4px; /* Giảm độ bo góc */
-  background:#eef6fb; 
-  border:1px solid #cfeafc; 
-  cursor:pointer; 
-  position:relative; 
-  font-size: 13px;
-  font-weight: 600;
-  color: #333; /* Màu chữ mặc định */
-  display: flex;
-  align-items: center;
-  line-height: 1.2;
-}
-.topic-chip.active { 
-  background:#38c172; /* Màu xanh lá cây khi active */
-  color:#fff; 
-  border-color:#2d9d5d; 
-}
-.topic-chip .count { font-weight:500; margin-left:8px; font-size:12px; color:inherit; }
+    /* right column: topics + table */
+    .right { width:42%; min-width:360px; display:flex; flex-direction:column; gap:12px; }
+    .topic-list { display:flex; flex-wrap:wrap; gap:8px; padding:8px; max-height:210px; overflow:auto; }
+    .topic-chip { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:#fff; border:1px solid #e6e9ef; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,0.02);}
+    .topic-chip.active { background:#111827; color:white; }
+    .topic-chip .count { color:var(--muted); font-size:13px; }
 
-/* Tooltip Summary Box: Thiết kế lại để khớp với hộp màu xanh lá cây trong ảnh */
-.tooltip { 
-  position:absolute; 
-  z-index:50; 
-  background: #38c172; /* Màu nền xanh lá cây */
-  color:#fff; 
-  padding:10px; 
-  border-radius:6px; 
-  font-size:13px; 
-  max-width:320px; 
-  box-shadow:0 6px 20px rgba(0,0,0,0.25); 
-  display:none; 
-  top: 100%; /* Đặt dưới chip */
-  left: 0;
-  margin-top: 8px;
-  border: 1px solid #2d9d5d;
-}
-.topic-chip:hover .tooltip { display:block; }
-.tooltip strong { font-size: 14px; }
-.tooltip .count { color: #d4f7e2; font-weight: 400; } 
+    .search-row { display:flex; gap:8px; margin-bottom:8px; }
+    .search-row input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; font-size:14px; }
+    .btn { padding:8px 12px; border-radius:8px; border:none; cursor:pointer; font-weight:600; }
+    .btn.primary { background:#2563eb; color:white; }
+    .btn.ghost { background:transparent; border:1px solid #e6e9ef; }
 
-/* Màu sắc các label cụ thể (dựa trên ảnh) */
-[data-label="scientific research and discoveries"] { background: #38c172; color: #fff; border-color: #2d9d5d; } /* Xanh lá */
-[data-label="jewish community education support"] { background: #e07b4b; color: #fff; border-color: #c0653f; } /* Cam đậm */
-[data-label="bird immigrations"] { background: #ff6699; color: #fff; border-color: #e04b7b; } /* Hồng */
-[data-label="global impact of indian fashion"] { background: #e0ac00; color: #fff; border-color: #c09100; } /* Vàng đậm */
-[data-label="textile industry and culture"] { background: #7c5cff; color: #fff; border-color: #6444e0; } /* Tím */
-[data-label="booking"] { background: #e07b7b; color: #fff; border-color: #c06565; } /* Hồng nhạt */
-[data-label="american southern culture terms"] { background: #66ccff; color: #fff; border-color: #4bacd9; } /* Xanh dương */
-[data-label="draft pick"] { background: #ff66ff; color: #fff; border-color: #e04be0; } /* Magenta */
+    .table { background:var(--card); border-radius:10px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #f1f3f5; font-size:14px; }
+    tr:hover { background:#fbfdff; cursor:pointer; }
 
+    .pred { display:inline-block; padding:4px 8px; border-radius:6px; background:#f1f5f9; font-size:13px; }
 
-/* documents table */
-.docs-area { flex:1; display:flex; flex-direction:column; gap:8px; }
-.docs-area > div:nth-child(2) { border: none !important; }
+    /* header small image */
+    .reference { display:flex; gap:12px; align-items:center; }
+    .reference img { width:140px; height:auto; border-radius:8px; box-shadow:0 8px 20px rgba(2,6,23,0.06); border:1px solid rgba(0,0,0,0.03); }
 
-.docs-table { width:100%; border-collapse:collapse; }
-.docs-table th, .docs-table td { text-align:left; padding:10px; border-bottom:1px solid #eef3f6; font-size:13px; }
-/* Thêm border xung quanh table và header */
-.docs-table { 
-  border: 1px solid #e2e6ea; 
-  border-radius: 4px; 
-  overflow: hidden; 
-}
-.docs-table thead th { 
-  background:#f6f9fb; 
-  font-weight:700; 
-  color:#1f3340; 
-  position:sticky; 
-  top:0; 
-  border-bottom: 1px solid #e2e6ea; 
-}
+    /* footer / metrics */
+    .metrics { display:flex; gap:12px; align-items:center; margin-top:8px; color:var(--muted); font-size:13px; }
 
-.doc-preview { color:#6b7280; max-width:60px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-/* Điều chỉnh lại style của tag để trông giống hơn */
-.tag { display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; background:#f1f5f9; border:1px solid #e2e8f0; font-weight: 500;}
-.tag.pred { background:#eaf5ea; color:#1b7a2f; border-color:#c5e6c6; } /* Màu label Predicted */
-.status-unread { color:#c0392b; font-weight:600; }
-.status-read { color:#2d9cdb; font-weight:600; }
-
-.footer-actions { display:flex; gap:8px; align-items:center; margin-top:8px; }
-.small { font-size:12px; color:#6b7280; }
-
-/* TOAST */
-#toast {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    z-index: 9999;
-    display: none;
-    font-size: 14px;
-    font-weight: 600;
-}
-#toast.show {
-    display: block;
-    animation: fadeInOut 3s forwards;
-}
-#toast.error {
-    background: #fce9e9;
-    border: 1px solid #f2b4b4;
-    color: #c0392b;
-}
-#toast.success {
-    background: #e6f6ff;
-    border: 1px solid #bfe8ff;
-    color: #2d9cdb;
-}
-
-@keyframes fadeInOut {
-    0% { opacity: 0; transform: translateY(20px); }
-    10% { opacity: 1; transform: translateY(0); }
-    90% { opacity: 1; transform: translateY(0); }
-    100% { opacity: 0; transform: translateY(20px); }
-}
-
-/* responsive */
-@media (max-width:900px) { .wrapper { flex-direction:column; } .left-placeholder, .right-panel { width:100%; } }
-</style>
+    /* responsive */
+    @media (max-width:1000px) {
+      .app { flex-direction:column; }
+      .left, .right { width:100%; min-width:auto; }
+      .doc-body { height:240px; }
+    }
+  </style>
 </head>
 <body>
-
-<div id="toast" style="display: none;"></div>
-
-<div class="wrapper">
-    <div class="left-placeholder" id="leftPlaceholder">
-        <div style="font-size: 14px; line-height: 1.6;">
-            <div id="docStatusInfo" style="font-size: 10px; color: #888; margin-bottom: 15px;">
-                User: <span id="currentUserId">N/A</span> | Doc ID: <span id="currentDocId">N/A</span> | Entropy: <span id="currentDocEntropy">N/A</span> | Labeled: <span id="labeledCount">0</span>
+  <div class="app">
+    <!-- LEFT: document view -->
+    <div class="left">
+      <div class="card">
+        <div class="doc-header">
+          <div class="reference">
+            <!-- local uploaded image (developer instruction: path used) -->
+            <img src="/mnt/data/9e74c895-b502-4185-bc4b-eff4e8af419d.png" alt="reference ui" />
+            <div>
+              <div class="doc-title">Labeling Interface</div>
+              <div class="doc-meta">Kết nối: <span id="apiStatus">...</span> · User: <strong id="userId">-</strong></div>
             </div>
-            <div style="margin-bottom: 15px;">
-                <button id="btnPrevious" style="border: 1px solid #ccc; padding: 5px 10px; background: #f0f0f0;">Previous (N/A)</button>
-                <button id="btnNext" style="border: 1px solid #ccc; padding: 5px 10px; background: #f0f0f0;">Next / Skip</button>
-            </div>
-            
-            <div id="summaryBox" style="border: 1px solid #ccc; padding: 15px; border-radius: 4px; background: #fcfcfc;">
-                Loading document summary...
-            </div>
+          </div>
 
-            <p id="documentText" style="overflow-y: auto; max-height: 300px; margin-top: 15px;">
-                Please wait while the system loads the next recommended document...
-            </p>
+          <div style="text-align:right">
+            <button class="btn ghost" id="btnNewUser">New Session</button>
+            <button class="btn primary" id="btnNextRec">Recommend Next</button>
+          </div>
+        </div>
 
-            <div id="labelingControlBox" style="border: 1px solid red; padding: 10px; margin-top: 15px; border-radius: 4px;">
-                Select a label suggestion or manually enter their defined label
-                <div id="llmSuggestions" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
-                                    </div>
-                <input type="text" id="labelInput" placeholder="Enter or select label" style="width: 100%; padding: 8px; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px;" />
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="btn-action" style="padding: 10px 15px; border: 1px solid #007bff; background: #007bff; color: white; border-radius: 4px;">Add Label (Not used in BASS)</button>
-                    <button class="btn-action" style="padding: 10px 15px; border: 1px solid #dc3545; background: #dc3545; color: white; border-radius: 4px;">Remove Label (Not used in BASS)</button>
-                    <button class="btn-action" style="padding: 10px 15px; border: 1px solid #ffc107; background: #ffc107; color: black; border-radius: 4px;">Add Explanation (Optional)</button>
-                    <button id="btnSubmit" style="padding: 10px 15px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 4px;">Submit & Next</button>
-                </div>
-            </div>
-        </div>
-    </div>
+        <div style="margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:600">Document</div>
+            <div class="doc-meta">Entropy: <span id="entropy">-</span></div>
+          </div>
 
-    <div class="right-panel" id="rightPanel">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <button class="btn" style="background: #e0e0e0; color: #333; border: 1px solid #ccc;">View Labels Full Screen</button>
-            <button id="btnViewAllDocs" class="btn btn-primary">View All Documents</button>
-        </div>
+          <div id="leftPlaceholder" class="doc-body" style="margin-top:12px;">
+            <p style="white-space:pre-wrap;color:#111827">Chưa có document nào được chọn. Bấm "Recommend Next" hoặc chọn document từ bảng bên phải.</p>
+          </div>
 
-        <div class="topics-area">
-            <span style="font-weight: bold; font-size: 14px; color: #2b3b4b;">Topics Filter</span>
-            <div class="topic-list" id="topicList">
-                <div class="small" style="color:#6b7280">No user-created topics yet. Label docs on the left panel to create topics.</div>
-            </div>
-        </div>
-        
-        <div class="controls">
-            <div class="search-box">
-                <input id="searchInput" placeholder="Enter keywords to search relevant documents..." />
-            </div>
-            <div>
-                <button class="btn" id="btnClearSearch">Reset Filters</button>
-            </div>
-        </div>
+          <div class="label-suggestions" id="suggestionArea">
+            <!-- suggestion chips go here -->
+          </div>
 
-        <div class="docs-area">
-            <div style="margin-bottom: 5px;">
-                </div>
+          <div class="controls">
+            <input id="customLabelInput" placeholder="Enter or select label" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid #e6e9ef" />
+            <button class="btn primary" id="btnAddLabel">Add Label</button>
+            <button class="btn ghost" id="btnSkip">Skip</button>
+          </div>
 
-            <div style="overflow:auto; height: 350px;">
-                <table class="docs-table" id="docsTable">
-                    <thead>
-                        <tr>
-                            <th style="width:60px">Documents (Preview)</th>
-                            <th style="width:180px">Predicted Label</th>
-                            <th style="width:100px">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="docsTbody">
-                        <tr><td colspan="3">Vui lòng khởi tạo user session để bắt đầu.</td></tr>
-                    </tbody>
-                </table>
-            </div>
+        </div>
+      </div>
 
-            <div class="footer-actions" style="justify-content: flex-end; margin-top: 15px;">
-                <div class="small" style="text-align: right;">A list of documents filtered by labels. Click to view/read.</div>
-            </div>
-        </div>
+      <div class="card" style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">Summary / Logs</div>
+          <div class="doc-meta">Labeled: <span id="labeledCount">0</span></div>
+        </div>
+        <div style="margin-top:8px;color:var(--muted);font-size:13px" id="summaryArea">Tóm tắt sẽ hiện ở đây khi chọn document.</div>
+      </div>
+    </div>
 
-    </div>
-</div>
+    <!-- RIGHT: topics + table -->
+    <div class="right">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">Topics</div>
+          <div style="font-size:13px;color:var(--muted)">Total docs: <strong id="totalDocs">-</strong></div>
+        </div>
 
-<script>
-/*
-  BASS Right Panel demo script
-  - INTEGRATED WITH FLASK BACKEND
-*/
+        <div class="topic-list" id="topicList" style="margin-top:10px">
+          <!-- topic chips injected here -->
+        </div>
 
-/* --------- CONFIG & STATE --------- */
-const API_BASE = 'http://localhost:5000'; 
-let CURRENT_USER = null; 
-let currentDoc = null; // { id, text, summary, llm_labels, entropy }
-let labeledDocsByLabel = {}; // { label: {count, summary} }
-let currentFilter = null; // Label đang được chọn để filter bảng docs
+        <div class="metrics" style="margin-top:10px">
+          <div>Topics: <strong id="topicCount">0</strong></div>
+          <div> Labeled docs: <strong id="lCount2">0</strong></div>
+        </div>
+      </div>
 
+      <div class="card" style="flex:1; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-weight:700">Documents</div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div class="search-row" style="margin:0;">
+              <input id="searchInput" placeholder="Search..." />
+              <button class="btn ghost" id="btnClearSearch">Clear</button>
+            </div>
+          </div>
+        </div>
 
-/* --------- UTILITY FUNCTIONS --------- */
+        <div style="margin-top:8px;" class="table">
+          <table>
+            <thead>
+              <tr><th>Preview</th><th>Predicted</th><th>Status</th></tr>
+            </thead>
+            <tbody id="docsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c])); }
+  <script>
+    /***********************
+     Config
+    ***********************/
+    const API_BASE = "http://localhost:5000";
 
-function showToast(msg, isError=false) {
-    const el = document.getElementById('toast');
-    el.className = 'show';
-    el.classList.add(isError ? 'error' : 'success');
-    el.innerText = msg;
-    setTimeout(() => { el.className = ''; el.classList.remove('error', 'success'); }, 3000);
-}
+    /* STATE */
+    let USER_ID = null;
+    let documents = [];         // { id, text }
+    let topics = {};            // from /get_topic_list (topic_counts)
+    let totalDocuments = 0;
+    let labeledCount = 0;
+    let currentDocId = null;
 
+    /* UTIL */
+    function el(q) { return document.querySelector(q); }
+    function byId(id) { return document.getElementById(id); }
 
-/* --------- API CALLS & CORE LOGIC --------- */
-
-/**
- * 1. Khởi tạo phiên làm việc người dùng
- */
-async function createUserSession() {
-    try {
-        const response = await fetch(`${API_BASE}/create_user`, { method: 'POST' });
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            CURRENT_USER = data.user_id;
-            console.log(`User created: ${CURRENT_USER}`);
-            showToast(`User session created: ${CURRENT_USER}. Starting labeling...`, false);
-
-            // Bắt đầu quy trình gán nhãn
-            await loadNextRecommendedDocument();
-            recalcTopics(); 
-            return true;
-        } else {
-            showToast(`Error creating user: ${data.message}`, true);
-            return false;
-        }
-    } catch (error) {
-        showToast(`Network error: Could not connect to Flask backend (${API_BASE}).`, true);
-        return false;
+    /* ====== API wrappers ====== */
+    async function apiCreateUser() {
+      const res = await fetch(`${API_BASE}/create_user`);
+      return res.json();
     }
-}
 
-
-/**
- * 2. Tải Document được Active Learning đề xuất tiếp theo
- */
-async function loadNextRecommendedDocument() {
-    if (!CURRENT_USER) return;
-    
-    try {
-        const url = `${API_BASE}/get_recommended_document?user_id=${CURRENT_USER}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            // Lấy thông tin chi tiết (Summary/LLM Labels) cho doc mới
-            await loadDocumentInformation(data.doc_id);
-        } else {
-            showToast(`Error getting next recommended doc: ${data.message}`, true);
-        }
-    } catch (error) {
-        showToast(`Network error loading next doc: ${error.message}`, true);
+    async function apiGetDocuments(user_id) {
+      const res = await fetch(`${API_BASE}/documents?user_id=${encodeURIComponent(user_id)}`);
+      return res.json(); // { status, documents: [{id,text}, ...] }
     }
-}
 
-
-/**
- * 3. Tải thông tin chi tiết của Document (Sử dụng cho cả Doc được Recommend và Doc từ Bảng)
- */
-async function loadDocumentInformation(docId) {
-    if (!CURRENT_USER) return;
-    
-    try {
-        const url = `${API_BASE}/get_document_information?user_id=${CURRENT_USER}&doc_id=${docId}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            currentDoc = { 
-                id: data.doc_id, 
-                text: data.text, 
-                summary: data.summary, 
-                llm_labels: data.llm_labels,
-                entropy: data.entropy_score // Có thể không có nếu dùng endpoint info
-            };
-            updateLeftPanel(currentDoc);
-        } else {
-            showToast(`Error loading doc info for ID ${docId}: ${data.message}`, true);
-        }
-    } catch (error) {
-        showToast(`Network error loading doc info: ${error.message}`, true);
+    async function apiGetTopicList(user_id) {
+      const res = await fetch(`${API_BASE}/get_topic_list?user_id=${encodeURIComponent(user_id)}`);
+      return res.json(); // { topics, topic_counts, total_topics }
     }
-}
 
+    async function apiGetDocumentInformation(user_id, docId) {
+      const res = await fetch(`${API_BASE}/get_document_information?user_id=${encodeURIComponent(user_id)}&doc_id=${encodeURIComponent(docId)}`);
+      return res.json(); // summary, llm_labels, suggestions
+    }
 
-/**
- * 4. Gán nhãn cho Doc hiện tại và chuyển sang Doc tiếp theo (Active Learning)
- */
-async function labelAndGetNextDoc() {
-    if (!CURRENT_USER || !currentDoc) {
-        showToast("No active user or document.", true);
+    async function apiLabelDocument(user_id, docId, label) {
+      const res = await fetch(`${API_BASE}/label_document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, doc_id: docId, label })
+      });
+      return res.json();
+    }
+
+    async function apiSearch(user_id, query) {
+      const res = await fetch(`${API_BASE}/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, query })
+      });
+      return res.json(); // { results: [ {id,score}, ... ] }
+    }
+
+    async function apiRecommendNext(user_id) {
+      // backend provides /get_recommended_document (GET)
+      const res = await fetch(`${API_BASE}/get_recommended_document?user_id=${encodeURIComponent(user_id)}`);
+      return res.json(); // { doc_id, text, entropy_score }
+    }
+
+    async function apiSkipDocument(user_id, docId) {
+      const res = await fetch(`${API_BASE}/skip_document`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ user_id, doc_id: docId })
+      });
+      return res.json();
+    }
+
+    /* ====== Renderers ====== */
+
+    function setApiStatus(text, ok=true) {
+      el('#apiStatus').innerText = text;
+      el('#apiStatus').style.color = ok ? '#059669' : '#ef4444';
+    }
+
+    function renderTopicsUI(topicCounts) {
+      const container = el('#topicList');
+      container.innerHTML = "";
+
+      const labels = Object.keys(topicCounts || {}).sort((a,b) => (topicCounts[b]||0) - (topicCounts[a]||0));
+
+      if (labels.length === 0) {
+        container.innerHTML = '<div class="small" style="color:#6b7280">No topics yet. Label some documents.</div>';
+        byId('topicCount').innerText = 0;
         return;
-    }
+      }
 
-    const labelInput = document.getElementById('labelInput');
-    const label = labelInput.value.trim();
+      labels.forEach(label => {
+        const docCount = topicCounts[label] || 0;
+        const pct = totalDocuments ? ((docCount / totalDocuments) * 100).toFixed(2) : "0.00";
 
-    if (!label) {
-        showToast("Please enter or select a label.", true);
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/recommend_document`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: CURRENT_USER,
-                doc_id: currentDoc.id,
-                label: label
-            })
-        });
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            showToast(`Labeled doc ${data.labeled} as "${label}". Loading next doc...`, false);
-            
-            // Cập nhật trạng thái và tải doc mới
-            currentDoc = { 
-                id: data.next_doc_id, 
-                text: data.next_text, 
-                entropy: data.entropy_score 
-            };
-            
-            // Lấy thông tin chi tiết cho doc mới (Summary/LLM Labels)
-            await loadDocumentInformation(currentDoc.id);
-
-            // Xóa nhãn đã nhập và làm mới Topics/Documents List
-            labelInput.value = '';
-            document.getElementById('labeledCount').textContent = data.labeled_count;
-            recalcTopics(); 
-        } else {
-            showToast(`Error labeling doc: ${data.message}`, true);
-        }
-    } catch (error) {
-        showToast(`Network error labeling doc: ${error.message}`, true);
-    }
-}
-
-
-/**
- * 5. Bỏ qua Document hiện tại và chuyển sang Doc tiếp theo
- */
-async function skipDocument() {
-    if (!CURRENT_USER || !currentDoc) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/skip_document`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: CURRENT_USER,
-                doc_id: currentDoc.id
-            })
-        });
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            showToast(`Skipped doc ${currentDoc.id}. Loading next recommended doc.`, false);
-            // Sau khi skip, lấy doc được đề xuất tiếp theo
-            await loadNextRecommendedDocument();
-        } else {
-            showToast(`Error skipping doc: ${data.message}`, true);
-        }
-    } catch (error) {
-        showToast(`Network error skipping doc: ${error.message}`, true);
-    }
-}
-
-
-/* --------- RENDERING & UI UPDATES --------- */
-
-/**
- * Cập nhật giao diện Left Panel với nội dung Doc mới
- */
-function updateLeftPanel(doc) {
-    if (!doc) return;
-    
-    document.getElementById('currentUserId').textContent = CURRENT_USER;
-    document.getElementById('currentDocId').textContent = doc.id;
-    document.getElementById('currentDocEntropy').textContent = doc.entropy ? doc.entropy.toFixed(4) : 'N/A';
-    
-    // Cập nhật nội dung tài liệu
-    const docTextEl = document.getElementById('documentText');
-    docTextEl.textContent = doc.text;
-    docTextEl.scrollTop = 0; // Cuộn về đầu
-
-    // Cập nhật Summary box (tóm tắt)
-    const summaryBox = document.getElementById('summaryBox');
-    summaryBox.innerHTML = `Approved/generated topics are displayed in this box. Each topic has a short summary description of all the documents assigned by users for that topic.<br><br><strong>Current Doc Summary:</strong> ${doc.summary || 'Summary loading or not available...'}`;
-
-    // Cập nhật LLM Label Suggestions
-    const suggestionContainer = document.getElementById('llmSuggestions');
-    suggestionContainer.innerHTML = ''; // Xóa suggestions cũ
-    
-    (doc.llm_labels || []).slice(0, 3).forEach(label => {
-        const btn = document.createElement('button');
-        btn.style.cssText = "padding: 5px 10px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px; font-size: 13px; cursor: pointer;";
-        btn.textContent = label;
-        btn.onclick = () => {
-            document.getElementById('labelInput').value = label;
+        const chip = document.createElement("div");
+        chip.className = "topic-chip";
+        chip.setAttribute("data-label", label);
+        chip.innerHTML = `<div style="display:flex;flex-direction:column;">
+                            <div style="font-weight:600">${label}</div>
+                            <div class="count">${docCount} docs · ${pct}%</div>
+                          </div>`;
+        chip.onclick = () => {
+          // toggle filter: simply highlight and filter table by clicking
+          const already = chip.classList.contains('active');
+          document.querySelectorAll('.topic-chip').forEach(c => c.classList.remove('active'));
+          if (!already) chip.classList.add('active');
+          renderDocsTable(already ? null : label);
         };
-        suggestionContainer.appendChild(btn);
-    });
-}
-
-
-/**
- * Tải và Render danh sách Topics (Labels) từ Backend
- */
-async function recalcTopics() {
-    if (!CURRENT_USER) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/get_user_topics?user_id=${CURRENT_USER}`);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            labeledDocsByLabel = data.topics.reduce((acc, topic) => {
-                acc[topic.label] = { count: topic.count, summary: topic.summary };
-                return acc;
-            }, {});
-            renderTopics(data.topics);
-            renderDocsTable(); 
-        }
-    } catch (error) {
-        console.error("Error fetching topics:", error);
-    }
-}
-
-function renderTopics(topics) {
-    const container = document.getElementById('topicList');
-    container.innerHTML = '';
-    
-    if (topics.length === 0) {
-        container.innerHTML = '<div class="small" style="color:#6b7280">No user-created topics yet. Label docs on the left panel to create topics.</div>';
-        return;
-    }
-
-    topics.forEach(topic => {
-        const label = topic.label;
-        const count = topic.count;
-        const summaryText = topic.summary; 
-        
-        const chip = document.createElement('div');
-        chip.className = 'topic-chip';
-        chip.setAttribute('data-label', label); 
-        
-        // Kích hoạt màu xanh lá cây cho chip đang được filter
-        if (label === currentFilter) chip.classList.add('active');
-        
-        chip.innerHTML = `<span>${label}</span> <span class="count">(${count})</span>`;
-        
-        const tooltip = document.createElement('div');
-        tooltip.className = 'tooltip';
-        tooltip.innerHTML = `
-            <strong>${label}</strong>
-            <div style="font-size:13px; margin: 4px 0;">Documents: ${count}</div>
-            <div style="margin-top:6px; font-size:12px; color:#fff; max-height: 100px; overflow: hidden; text-overflow: ellipsis;">${summaryText}</div>
-        `;
-        chip.appendChild(tooltip);
-
-        // Click -> filter toggle
-        chip.addEventListener('click', ()=> {
-            currentFilter = currentFilter === label ? null : label;
-            recalcTopics(); 
-        });
         container.appendChild(chip);
-    });
-}
+      });
 
-
-/**
- * Tải và Render Bảng Documents theo Filter/Search
- */
-async function renderDocsTable() {
-    const tbody = document.getElementById('docsTbody');
-    if (!CURRENT_USER) {
-        tbody.innerHTML = '<tr><td colspan="3">Vui lòng khởi tạo user session để bắt đầu.</td></tr>';
-        return;
+      byId('topicCount').innerText = labels.length;
     }
-    
-    tbody.innerHTML = '<tr><td colspan="3">Loading documents...</td></tr>';
-    
-    // Xây dựng URL cho API
-    let url = `${API_BASE}/get_filtered_documents?user_id=${CURRENT_USER}&limit=50`;
-    const q = document.getElementById('searchInput').value.trim();
 
-    if (currentFilter) url += `&label=${currentFilter}`;
-    if (q.length > 0) url += `&query=${q}`; 
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            tbody.innerHTML = '';
-            const displayRows = data.documents.slice(0, 4); // Chỉ hiển thị 4 dòng như trong ảnh
-
-            if (displayRows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3">No documents found with current filters.</td></tr>';
-                return;
-            }
-
-            for (const doc of displayRows) {
-                const tr = document.createElement('tr');
-                tr.style.cursor = 'pointer';
-                tr.addEventListener('click', ()=> {
-                    loadDocumentInformation(doc.id); // Tải doc chi tiết sang Left Panel
-                });
-
-                // predicted label
-                let predLabel = doc.predicted || null;
-                let predHtml = predLabel ? `<span class="tag pred">${predLabel}</span>` : `<span class="tag">-</span>`;
-
-                const preview = doc.text.slice(0, 30) + '...';
-                const statusHtml = doc.status === 'Unread' ? `<span class="status-unread">Unread</span>` : `<span class="status-read">Read</span>`;
-
-                tr.innerHTML = `
-                    <td class="doc-preview" title="${escapeHtml(doc.text)}">${escapeHtml(preview)}</td>
-                    <td>${predHtml}</td>
-                    <td>${statusHtml}</td>
-                `;
-                tbody.appendChild(tr);
-            }
-        }
-    } catch (error) {
-        console.error("Error fetching documents:", error);
-        tbody.innerHTML = '<tr><td colspan="3">Lỗi tải dữ liệu. Vui lòng kiểm tra console.</td></tr>';
+    function truncateText(str, len=80) {
+      if (!str) return "";
+      return str.length > len ? str.slice(0, len) + "..." : str;
     }
-}
 
+    async function renderDocsTable(filterLabel=null) {
+      const tbody = byId('docsTbody');
+      tbody.innerHTML = "";
 
-/* --------- INITIALIZATION & EVENT LISTENERS --------- */
+      let rows = documents.slice();
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Khởi tạo session khi tải trang
-    createUserSession();
+      // search
+      const q = byId('searchInput').value.trim();
+      if (q.length > 0) {
+        try {
+          const sr = await apiSearch(USER_ID, q);
+          if (sr && sr.results) {
+            const allow = new Set(sr.results.map(r => r.id));
+            rows = rows.filter(d => allow.has(d.id));
+          }
+        } catch(err) { console.warn("search err", err); }
+      }
 
-    // 2. Event Listener cho nút Submit & Next
-    const submitButton = document.getElementById('btnSubmit');
-    if (submitButton) {
-        submitButton.addEventListener('click', labelAndGetNextDoc);
-    }
-    
-    // 3. Event Listener cho nút Next / Skip
-    const nextButton = document.getElementById('btnNext');
-    if (nextButton) {
-        nextButton.addEventListener('click', () => {
-            if (currentDoc) skipDocument(currentDoc.id);
+      // filter by label: we only have topicCounts mapping, but backend's get_topic_list doesn't return mapping docIDs =>
+      // so best-effort: if filterLabel provided, we will fetch get_document_information for each doc to see if it belongs (expensive).
+      // Optimization: if backend extended to return topic_docs mapping, use it. For now we filter by predicted_label heuristic (if present)
+      if (filterLabel) {
+        rows = rows.filter(d => {
+          // if doc has a 'predicted_label' field (not always), or cached topics mapping
+          if (d.predicted_label) return d.predicted_label === filterLabel;
+          // fallback: don't filter aggressively
+          return true;
         });
+      }
+
+      rows.slice(0, 200).forEach(doc => {
+        const tr = document.createElement('tr');
+        tr.onclick = async () => { await openDocument(doc.id); };
+        tr.innerHTML = `
+          <td class="doc-preview">${escapeHtml(truncateText(doc.text || '', 120))}</td>
+          <td><span class="pred">${doc.predicted_label || '-'}</span></td>
+          <td>${doc._status || 'Unread'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
-    // 4. Event Listener cho Search Box
-    document.getElementById('searchInput').addEventListener('input', ()=>{
-        clearTimeout(window._searchDeb);
-        window._searchDeb = setTimeout(()=>renderDocsTable(), 300);
-    });
+    /* ====== Document view / labeling ====== */
+    async function openDocument(docId) {
+      currentDocId = docId;
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) return;
+      // mark as read locally
+      doc._status = "Read";
+      renderDocsTable();
 
-    // 5. Event Listener cho Clear Search/Reset Filters
-    document.getElementById('btnClearSearch').addEventListener('click', ()=>{
-        document.getElementById('searchInput').value='';
-        currentFilter = null;
-        recalcTopics(); // Tải lại Topics và Docs
-    });
-    
-    // 6. Nút View All Docs (Reset Filter)
-    document.getElementById('btnViewAllDocs').addEventListener('click', ()=>{
-        document.getElementById('searchInput').value='';
-        currentFilter = null;
-        recalcTopics(); 
-    });
-});
-</script>
+      // display text
+      const left = byId('leftPlaceholder');
+      left.querySelector('p').innerText = doc.text || "";
 
+      // fetch LLM suggestions + summary
+      try {
+        const info = await apiGetDocumentInformation(USER_ID, docId);
+        if (info.status === 'success') {
+          const sug = info.suggestions || [];
+          const summary = info.summary || "";
+          renderSuggestions(sug);
+          byId('summaryArea').innerText = summary || info.text || "Không có tóm tắt.";
+          byId('entropy').innerText = (info.entropy_score !== undefined) ? info.entropy_score : '-';
+        } else {
+          renderSuggestions([]);
+          byId('summaryArea').innerText = "Không thể lấy thông tin tài liệu.";
+        }
+      } catch (err) {
+        console.warn("get document info", err);
+        renderSuggestions([]);
+        byId('summaryArea').innerText = "Lỗi khi lấy thông tin tài liệu.";
+      }
+    }
+
+    function renderSuggestions(suggestions) {
+      const area = byId('suggestionArea');
+      area.innerHTML = "";
+      if (!Array.isArray(suggestions) || suggestions.length === 0) {
+        area.innerHTML = '<div class="chip" style="background:#fff">No suggestions</div>';
+        return;
+      }
+
+      suggestions.forEach(s => {
+        // suggestions in backend are list of dicts {label, confidence}
+        // or tuple-like [label, confidence] if different; handle both.
+        let label = s.label || (Array.isArray(s) ? s[0] : null);
+        let conf = s.confidence || (Array.isArray(s) ? s[1] : null);
+        const c = document.createElement('div');
+        c.className = 'chip suggest';
+        c.innerText = `${label} ${conf ? `· ${Math.round(conf*100)}%` : ''}`;
+        c.onclick = () => {
+          byId('customLabelInput').value = label;
+          // add label immediately?
+        };
+        area.appendChild(c);
+      });
+    }
+
+    /* ====== actions ====== */
+    async function addLabelToCurrent() {
+      const label = byId('customLabelInput').value.trim();
+      if (!label) { alert("Nhập label trước khi add"); return; }
+      if (currentDocId === null) { alert("Chọn document trước"); return; }
+
+      try {
+        const res = await apiLabelDocument(USER_ID, currentDocId, label);
+        if (res.status === 'success') {
+          labeledCount = res.labeled_count || labeledCount + 1;
+          byId('labeledCount').innerText = labeledCount;
+          byId('lCount2').innerText = labeledCount;
+          // update local topics map then re-render
+          topics[label] = (topics[label] || 0) + 1;
+          renderTopicsUI(topics);
+          // visually mark doc
+          const doc = documents.find(d => d.id === currentDocId);
+          if (doc) doc._status = "Labeled";
+          renderDocsTable();
+          byId('customLabelInput').value = "";
+        } else {
+          alert("Error: " + (res.message || JSON.stringify(res)));
+        }
+      } catch (err) {
+        console.error(err); alert("Lỗi khi gọi API label_document");
+      }
+    }
+
+    async function recommendNext() {
+      try {
+        const res = await apiRecommendNext(USER_ID);
+        if (res.status === 'success') {
+          const nextId = res.doc_id || res.next_doc_id || null;
+          if (nextId !== null && nextId !== undefined) {
+            // ensure doc exists locally, if not push
+            const idx = documents.findIndex(d => d.id === nextId);
+            if (idx === -1) {
+              // push doc to local list
+              const text = res.text || res.next_text || "";
+              documents.push({ id: nextId, text });
+            }
+            await openDocument(nextId);
+          } else {
+            alert("Không có doc nào được đề xuất nữa.");
+          }
+        } else {
+          alert("Recommend API lỗi: " + (res.message||JSON.stringify(res)));
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Lỗi recommend");
+      }
+    }
+
+    async function skipCurrent() {
+      if (currentDocId === null) { alert("Chưa chọn doc"); return; }
+      try {
+        const res = await apiSkipDocument(USER_ID, currentDocId);
+        if (res.status === 'success') {
+          const doc = documents.find(d => d.id === currentDocId);
+          if (doc) doc._status = "Skipped";
+          renderDocsTable();
+          alert("Đã skip: " + currentDocId);
+        } else alert("Skip failed: " + JSON.stringify(res));
+      } catch (err) { console.error(err); alert("Lỗi skip"); }
+    }
+
+    /* ====== UI events ====== */
+    byId('btnAddLabel').onclick = addLabelToCurrent;
+    byId('btnNextRec').onclick = recommendNext;
+    byId('btnSkip').onclick = skipCurrent;
+    byId('btnNewUser').onclick = async () => {
+      // reset local and create new user
+      await init(true);
+    };
+    byId('btnClearSearch').onclick = () => { byId('searchInput').value = ""; renderDocsTable(); };
+    byId('searchInput').oninput = () => {
+      // debounce
+      clearTimeout(window._typing);
+      window._typing = setTimeout(() => renderDocsTable(), 250);
+    };
+
+    /* ====== init ====== */
+    async function init(forceNew=false) {
+      setApiStatus('Kết nối...');
+      try {
+        // create user / session
+        const r = await apiCreateUser();
+        if (r.status === 'success') {
+          USER_ID = r.user_id;
+          totalDocuments = r.total_documents || 0;
+          byId('userId').innerText = USER_ID;
+          byId('totalDocs').innerText = totalDocuments;
+          setApiStatus('Connected', true);
+        } else {
+          setApiStatus('Create user lỗi: ' + (r.message || 'unknown'), false);
+          return;
+        }
+
+        // load documents
+        const docResp = await apiGetDocuments(USER_ID);
+        if (docResp.status === 'success') {
+          documents = docResp.documents.map(d => ({ id: d.id, text: d.text }));
+          // mark unread
+          documents.forEach(d => d._status = 'Unread');
+          byId('labeledCount').innerText = 0;
+          labeledCount = 0;
+        } else {
+          console.warn("documents fetch failed", docResp);
+        }
+
+        // load topics
+        const t = await apiGetTopicList(USER_ID);
+        if (t.status === 'success') {
+          // t.topic_counts is mapping label->count (if backend returns)
+          topics = t.topic_counts || {};
+          // fallback: build empty mapping
+          totalDocuments = totalDocuments || documents.length;
+          byId('topicCount').innerText = (t.total_topics || Object.keys(topics).length);
+          byId('totalDocs').innerText = totalDocuments;
+          renderTopicsUI(topics);
+        } else {
+          console.warn("topic list fail", t);
+        }
+
+        // render table
+        renderDocsTable();
+      } catch (err) {
+        console.error(err);
+        setApiStatus('Không thể kết nối', false);
+      }
+    }
+
+    // escape HTML utility for previews
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+    }
+
+    // kick off
+    init();
+
+  </script>
 </body>
 </html>
