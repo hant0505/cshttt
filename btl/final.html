@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BASS — Topics & Semantic Search (Active Learning Interface)</title>
+<style>
+    /* --- CSS STYLES --- */
+    body { font-family: "Segoe UI", Roboto, Arial, sans-serif; background:#fff; color:#222; margin:0; padding:20px; box-sizing: border-box; }
+    .wrapper { display:flex; gap:20px; height: calc(100vh - 40px); }
+    
+    /* Left Panel */
+    .left-placeholder { 
+        width:48%; 
+        background:#fff; 
+        border:1px solid #e2e6ea; 
+        padding:16px; 
+        border-radius:8px; 
+        display: flex; 
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    /* Right Panel */
+    .right-panel { 
+        width:52%; 
+        background:#fff; 
+        border:1px solid #e2e6ea; 
+        padding:16px; 
+        border-radius:8px; 
+        display:flex; 
+        flex-direction:column; 
+        overflow-y: hidden; /* Control scroll inside components */
+    }
+
+    h2 { margin:0 0 12px 0; font-size:18px; color:#2b3b4b; }
+    
+    /* Buttons & Inputs */
+    .btn { padding:8px 12px; border-radius:4px; border:1px solid #ccc; background:#f0f0f0; cursor:pointer; font-size:14px; transition: all 0.2s; }
+    .btn:hover { background: #e0e0e0; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background:#d4e8f7; color:#2d9cdb; border:1px solid #b3d9f9; font-weight: 600; }
+    .btn-success { background:#28a745; color:white; border:1px solid #218838; }
+    .btn-danger { background:#dc3545; color:white; border:1px solid #c82333; }
+    
+    .search-box { display:flex; gap:8px; align-items:center; margin-bottom: 10px;}
+    .search-box input { width:100%; padding:10px 12px; border:1px solid #d1dbe2; border-radius:4px; font-size:14px; }
+
+    /* Topics Area */
+    .topics-area { 
+        margin-bottom:12px; 
+        padding: 10px; 
+        border: 1px solid #e2e6ea; 
+        border-radius: 8px; 
+        background: #f9fafb;
+        min-height: 60px;
+    }
+    .topic-list { display:flex; flex-wrap:wrap; gap:8px; }
+    
+    .topic-chip { 
+        padding:6px 12px; 
+        border-radius: 16px; 
+        background:#eef6fb; 
+        border:1px solid #cfeafc; 
+        cursor:pointer; 
+        position:relative; 
+        font-size: 13px;
+        font-weight: 500;
+        color: #333; 
+        display: flex;
+        align-items: center;
+    }
+    .topic-chip:hover { background: #e2eff9; }
+    .topic-chip.active { background:#38c172; color:#fff; border-color:#2d9d5d; }
+    
+    /* Tooltip */
+    .tooltip { 
+        position:absolute; z-index:100; 
+        background: #38c172; color:#fff; 
+        padding:12px; border-radius:6px; 
+        font-size:13px; width:280px; 
+        box-shadow:0 4px 12px rgba(0,0,0,0.15); 
+        display:none; top: 110%; left: 0;
+        border: 1px solid #2d9d5d;
+        white-space: normal;
+        line-height: 1.4;
+    }
+    .topic-chip:hover .tooltip { display:block; }
+
+    /* Document Table */
+    .docs-area { flex:1; display:flex; flex-direction:column; overflow: hidden; }
+    .table-container { overflow-y: auto; flex:1; border: 1px solid #e2e6ea; border-radius: 4px; }
+    .docs-table { width:100%; border-collapse:collapse; }
+    .docs-table th, .docs-table td { text-align:left; padding:12px 10px; border-bottom:1px solid #eef3f6; font-size:13px; }
+    .docs-table thead th { background:#f6f9fb; font-weight:700; color:#1f3340; position:sticky; top:0; z-index: 10; }
+    .docs-table tbody tr:hover { background-color: #f1f5f9; cursor: pointer; }
+    
+    .doc-preview { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color: #555; }
+    .tag { display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; font-weight: 600; }
+    .tag.pred { background:#eaf5ea; color:#1b7a2f; border:1px solid #c5e6c6; }
+    .status-unread { color:#c0392b; font-weight:600; font-size: 12px; }
+    .status-read { color:#2d9cdb; font-weight:600; font-size: 12px; }
+    .status-labeled { color:#28a745; font-weight:700; font-size: 12px; }
+
+    /* Loading Overlay */
+    #loadingOverlay {
+        position: fixed; top:0; left:0; width:100%; height:100%;
+        background: rgba(255,255,255,0.8);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 9999; font-weight: bold; color: #333;
+        backdrop-filter: blur(2px);
+    }
+    .hidden { display: none !important; }
+
+    /* Label Suggestion Buttons */
+    .suggestion-btn {
+        border: 1px solid #ddd;
+        background: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #444;
+    }
+    .suggestion-btn:hover {
+        background: #eef6fb;
+        border-color: #2d9cdb;
+        color: #2d9cdb;
+    }
+    .suggestion-container {
+        display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+    }
+
+    @media (max-width:900px) { .wrapper { flex-direction:column; height: auto; } .left-placeholder, .right-panel { width:100%; min-height: 500px; } }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">Initializing System...</div>
+
+<div class="wrapper">
+    <!-- LEFT PANEL: Document Viewer & Labeling -->
+    <div class="left-placeholder" id="leftPlaceholder">
+        <!-- Timer & Controls -->
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items: center;">
+            <div id="timer" style="font-size: 12px; color: #888; font-weight:bold;">Timer: 00:00:00</div>
+            <div>
+                <button class="btn" id="btnPrev">Previous</button>
+                <button class="btn" id="btnNext">Next (Skip)</button>
+            </div>
+        </div>
+
+        <!-- Document Content -->
+        <div style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
+            <h3 style="margin-top:0; font-size: 16px; color: #444;">Document Viewer <span id="docIdDisplay" style="font-weight:normal; color:#888; font-size:12px;"></span></h3>
+            
+            <!-- Summary Box -->
+            <div style="background: #fff8e1; border: 1px solid #ffeeba; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; line-height: 1.5; color: #856404;">
+                <strong>Summary:</strong> <span id="docSummary">Loading summary...</span>
+            </div>
+
+            <!-- Main Text -->
+            <div id="docText" style="font-size: 15px; line-height: 1.6; color: #333; white-space: pre-wrap;">
+                Loading document content...
+            </div>
+        </div>
+
+        <!-- Labeling Area -->
+        <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: auto;">
+            <div style="font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px;">AI Suggestions:</div>
+            <div class="suggestion-container" id="llmSuggestions">
+                <!-- Buttons will be injected here -->
+                <span style="color:#999; font-size:12px;">Fetching suggestions...</span>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <input type="text" id="labelInput" placeholder="Enter label or select from suggestions above" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px;" />
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn btn-success" id="btnSubmitLabel" style="flex:1;">Add Label & Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL: Topics & List -->
+    <div class="right-panel">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center;">
+            <h2 style="margin:0;">Topic Overview</h2>
+            <button class="btn btn-primary" id="btnViewAllDocs">Refresh Table</button>
+        </div>
+
+        <!-- Topics Chips -->
+        <div class="topics-area">
+            <div class="topic-list" id="topicList">
+                <span style="color:#888; font-size:13px; padding:5px;">No topics created yet.</span>
+            </div>
+        </div>
+        
+        <!-- Search -->
+        <div class="controls">
+            <div class="search-box">
+                <input id="searchInput" placeholder="Search documents via semantics..." />
+                <button class="btn" id="btnSearch">Search</button>
+            </div>
+        </div>
+
+        <!-- Documents Table -->
+        <div class="docs-area">
+            <div class="table-container">
+                <table class="docs-table" id="docsTable">
+                    <thead>
+                        <tr>
+                            <th style="width:50%">Document (Truncated)</th>
+                            <th style="width:30%">Predicted Label</th>
+                            <th style="width:20%">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="docsTbody">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="footer-actions" style="margin-top: 8px; text-align: right;">
+                <span class="small" id="tableStats" style="font-size:12px; color:#666;">Loading...</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+/* BASS FRONTEND INTEGRATION
+   Connects to Flask API at localhost:5000
+*/
+
+const API_BASE = 'http://localhost:5000';
+let STATE = {
+    userId: null,
+    currentDocId: null,
+    labeledHistory: new Set(), // Set of docIds
+    readDocs: new Set(),       // Set of docIds viewed
+    allDocs: [],               // Cache of all docs for table
+    predictions: {},           // Prediction map {id: [label, score]}
+    topicStats: {},            // From get_topic_list
+    isSearchActive: false
+};
+
+// --- UTILS ---
+const $ = id => document.getElementById(id);
+const showLoading = (msg) => { 
+    $('loadingOverlay').innerText = msg; 
+    $('loadingOverlay').classList.remove('hidden'); 
+};
+const hideLoading = () => $('loadingOverlay').classList.add('hidden');
+
+// --- API CALLS ---
+
+async function apiCall(endpoint, method='GET', body=null) {
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        const config = { method, headers };
+        
+        let url = `${API_BASE}${endpoint}`;
+        if (method === 'GET' && body) {
+            const params = new URLSearchParams(body).toString();
+            url += `?${params}`;
+        } else if (body) {
+            config.body = JSON.stringify(body);
+        }
+
+        const res = await fetch(url, config);
+        const data = await res.json();
+        
+        if (data.status === 'error') throw new Error(data.message);
+        return data;
+    } catch (err) {
+        console.error(`API Error (${endpoint}):`, err);
+        alert(`Error: ${err.message}`);
+        hideLoading();
+        return null;
+    }
+}
+
+// --- CORE FLOWS ---
+
+async function initSystem() {
+    showLoading("Creating Session...");
+    
+    // 1. Create User
+    const userRes = await apiCall('/create_user', 'POST');
+    if (!userRes) return;
+    STATE.userId = userRes.user_id;
+    
+    // 2. Start Timer
+    startTimer();
+
+    // 3. Load Initial Document (Active Learning)
+    await loadNextRecommended();
+
+    // 4. Load Right Panel Data
+    await refreshRightPanel();
+
+    hideLoading();
+}
+
+// Timer Logic
+function startTimer() {
+    let seconds = 0;
+    setInterval(() => {
+        seconds++;
+        const h = Math.floor(seconds / 3600).toString().padStart(2,'0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2,'0');
+        const s = (seconds % 60).toString().padStart(2,'0');
+        $('timer').innerText = `Timer: ${h}:${m}:${s}`;
+    }, 1000);
+}
+
+// --- LEFT PANEL LOGIC ---
+
+async function loadNextRecommended() {
+    showLoading("Finding best document to label...");
+    
+    // Call /get_recommended_document
+    const res = await apiCall('/get_recommended_document', 'GET', { user_id: STATE.userId });
+    if (res) {
+        STATE.currentDocId = res.doc_id;
+        $('docText').innerText = res.text; // Temporary text
+        $('docIdDisplay').innerText = `(ID: ${res.doc_id})`;
+        $('labelInput').value = ''; // Clear input
+        
+        // Now fetch full info (LLM suggestions + Summary)
+        await loadDocumentInfo(res.doc_id);
+    }
+    hideLoading();
+}
+
+async function loadDocumentInfo(docId) {
+    $('docSummary').innerHTML = '<i>Generating summary with LLM...</i>';
+    $('llmSuggestions').innerHTML = '<span style="color:#888; font-size:12px;">Analyzing text...</span>';
+    STATE.readDocs.add(docId);
+
+    const res = await apiCall('/get_document_information', 'GET', { 
+        user_id: STATE.userId, 
+        doc_id: docId 
+    });
+
+    if (res) {
+        // Update Text (in case recommended only returned partial or we want standardized)
+        // Backend logic: /get_document_information returns truncated text (100 chars). 
+        // We likely want full text. 
+        // *Adjustment*: The python code for get_recommended returns full text. 
+        // get_document_information returns text[:100]. 
+        // So we KEEP the text from recommended or update if needed. 
+        // Let's stick to the text from recommended for the main view, or fetch full doc if needed.
+        // For now, assuming recommended gave enough text.
+        
+        // Update Summary
+        $('docSummary').innerText = res.summary || "No summary available.";
+
+        // Update Suggestions
+        const container = $('llmSuggestions');
+        container.innerHTML = '';
+        if (res.suggestions && res.suggestions.length > 0) {
+            res.suggestions.forEach(s => {
+                const btn = document.createElement('button');
+                btn.className = 'suggestion-btn';
+                btn.innerHTML = `${s.label} <span style="font-size:10px; opacity:0.8">(${(s.confidence*100).toFixed(0)}%)</span>`;
+                btn.onclick = () => { $('labelInput').value = s.label; };
+                container.appendChild(btn);
+            });
+        } else {
+            container.innerHTML = '<span style="color:#888;">No suggestions found.</span>';
+        }
+    }
+}
+
+async function submitLabel() {
+    const label = $('labelInput').value.trim();
+    if (!label) {
+        alert("Please enter or select a label.");
+        return;
+    }
+
+    showLoading("Training classifier...");
+
+    const res = await apiCall('/label_document', 'POST', {
+        user_id: STATE.userId,
+        doc_id: STATE.currentDocId,
+        label: label
+    });
+
+    if (res) {
+        // ❌ bỏ dòng tự add, để backend là nguồn truth
+        // STATE.labeledHistory.add(STATE.currentDocId);
+
+        await loadNextRecommended();
+        await refreshRightPanel();
+    }
+
+    hideLoading();
+}
+
+
+async function prevDocument() {
+    showLoading("Undoing last action...");
+    // /back_document
+    const res = await apiCall('/back_document', 'POST', { user_id: STATE.userId });
+    
+    if (res) {
+        STATE.currentDocId = res.doc_id;
+        STATE.labeledHistory.delete(res.doc_id); // Remove from history
+        
+        // Display previous doc
+        $('docText').innerText = res.text;
+        $('docIdDisplay').innerText = `(ID: ${res.doc_id})`;
+        $('labelInput').value = ''; // Should we restore label? API doesn't return it, so clear.
+        
+        // Reload info
+        await loadDocumentInfo(res.doc_id);
+        await refreshRightPanel();
+    }
+    hideLoading();
+}
+
+// --- RIGHT PANEL LOGIC ---
+
+async function refreshRightPanel() {
+    // Parallel fetch: Topics list AND Table data
+    await Promise.all([renderTopics(), renderTable()]);
+}
+
+async function renderTopics() {
+    // /get_topic_list
+    const res = await apiCall('/get_topic_list', 'GET', { user_id: STATE.userId });
+    const container = $('topicList');
+    container.innerHTML = '';
+
+    if (res && res.topics.length > 0) {
+        res.topics.forEach(topic => {
+            const count = res.topic_counts[topic] || 0;
+            
+            const chip = document.createElement('div');
+            chip.className = 'topic-chip';
+            chip.innerHTML = `
+                ${topic} <span style="margin-left:6px; font-weight:bold; opacity:0.7; font-size:11px;">(${count})</span>
+                <div class="tooltip" id="tooltip-${topic.replace(/\s/g,'-')}">Loading summary...</div>
+            `;
+            
+            // Hover to fetch summary
+            chip.onmouseenter = async () => {
+                const tt = chip.querySelector('.tooltip');
+                if (tt.innerText === 'Loading summary...') {
+                    const sumRes = await apiCall('/get_topic_summary', 'GET', {
+                        user_id: STATE.userId,
+                        label: topic
+                    });
+                    if (sumRes) tt.innerText = sumRes.summary;
+                }
+            };
+
+            container.appendChild(chip);
+        });
+    } else {
+        container.innerHTML = '<span style="color:#888; font-size:13px;">No topics yet. Label a document to start.</span>';
+    }
+}
+
+async function renderTable(filterResults = null) {
+    const tbody = $('docsTbody');
+    tbody.innerHTML = '';
+    
+    // 1. Get all docs (/documents) if not cached
+    if (STATE.allDocs.length === 0) {
+        const docRes = await apiCall('/documents', 'GET', { user_id: STATE.userId });
+        if (docRes) STATE.allDocs = docRes.documents;
+    }
+
+    // 2. Get Predictions & Metrics (/display)
+    // Note: display returns predictions for ALL docs usually
+    const displayRes = await apiCall('/display', 'GET', { user_id: STATE.userId });
+    if (displayRes) {
+        STATE.predictions = displayRes.predictions || {};
+
+        // ✅ labeled_docs là LIST, có thể undefined nếu backend lỗi
+        STATE.labeledHistory = new Set(
+            (displayRes.labeled_docs || []).map(id => parseInt(id))
+        );
+
+        const m = displayRes.metrics || {};
+        const purity = (m.purity != null) ? m.purity.toFixed(3) : 'N/A';
+        const ari    = (m.ari    != null) ? m.ari.toFixed(3)    : 'N/A';
+        $('tableStats').innerText = `Metrics - Purity: ${purity} | ARI: ${ari}`;
+    }
+
+
+
+    // 3. Determine rows to show
+    let rowsToShow = [];
+    
+    if (filterResults) {
+        // If search active, use filter results (which are [{id, score}])
+        const ids = new Set(filterResults.map(r => r.id));
+        rowsToShow = STATE.allDocs.filter(d => ids.has(d.id));
+    } else {
+        // Show all (or slice for performance if needed, showing first 100)
+        // Lọc: chỉ hiện tài liệu predicted là "không chắc chắn" + chưa labeled
+        rowsToShow = STATE.allDocs.filter(doc => {
+            const pred = STATE.predictions[doc.id];
+            const isUncertain = pred !== undefined;   // backend chỉ gửi uncertain
+            const notLabeledByUser = !STATE.labeledHistory.has(doc.id);  // ✓ FIX: sử dụng labeledHistory từ backend
+            return isUncertain && notLabeledByUser;  // ✓ Chỉ hiện nếu uncertain AND chưa labeled
+        });
+
+    }
+
+    // 4. Render
+    rowsToShow.slice(0, 100).forEach(doc => { // Limit to 100 rows for DOM performance
+        const tr = document.createElement('tr');
+        
+        // Status logic
+        let statusHtml = '<span class="status-unread">Unread</span>';
+        if (STATE.labeledHistory.has(doc.id)) {
+            statusHtml = '<span class="status-labeled">Labeled</span>';
+        } else if (STATE.readDocs.has(doc.id)) {
+            statusHtml = '<span class="status-read">Read</span>';
+        }
+
+        // Prediction logic
+        let predHtml = '<span class="tag">-</span>';
+        const pred = STATE.predictions[doc.id]; // ✓ FIX: pred là object {predicted_label, confidence, reason}
+        if (pred) {
+            const conf = typeof pred.confidence === 'number' ? pred.confidence : pred[1];
+            const label = pred.predicted_label || pred[0];
+            predHtml = `<span class="tag pred" title="Confidence: ${(conf*100).toFixed(0)}%">${label}</span>`;
+        }
+
+        tr.innerHTML = `
+            <td class="doc-preview">${doc.text}</td>
+            <td>${predHtml}</td>
+            <td>${statusHtml}</td>
+        `;
+        
+        // Click to view
+        tr.onclick = async () => {
+            STATE.currentDocId = doc.id;
+            $('docText').innerText = doc.text;
+            $('docIdDisplay').innerText = `(ID: ${doc.id})`;
+            $('labelInput').value = '';
+            await loadDocumentInfo(doc.id);
+        };
+
+        tbody.appendChild(tr);
+    });
+}
+
+async function handleSearch() {
+    const query = $('searchInput').value.trim();
+    if (!query) {
+        renderTable(null); // Reset
+        return;
+    }
+    
+    const res = await apiCall('/search', 'POST', { user_id: STATE.userId, query });
+    if (res && res.results) {
+        renderTable(res.results);
+    }
+}
+
+// --- EVENTS ---
+
+$('btnNext').addEventListener('click', async () => {
+    // Skip logic: Technically could implement /skip_document if backend had it
+    // For now, treating as "Get new recommendation"
+    await loadNextRecommended();
+});
+
+$('btnPrev').addEventListener('click', prevDocument);
+$('btnSubmitLabel').addEventListener('click', submitLabel);
+$('btnSearch').addEventListener('click', handleSearch);
+$('btnViewAllDocs').addEventListener('click', () => {
+    $('searchInput').value = '';
+    renderTable(null);
+});
+$('searchInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleSearch();
+});
+
+// --- START ---
+window.addEventListener('DOMContentLoaded', initSystem);
+
+</script>
+
+</body>
+</html>
