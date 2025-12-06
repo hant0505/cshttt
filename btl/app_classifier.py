@@ -18,16 +18,17 @@ CORS(app)
 # Load base data
 print("Loading data...")
 doc_topics = load_doc_topics()
-texts = load_documents()
-tfidf_matrix = compute_tfidf(texts)
-BASE_CLASSIFIER = EnhancedActiveLearning(doc_topics, tfidf_matrix, combine_weight=0.5)
+# texts = load_documents()
+texts_processed, texts_raw = load_documents()
+tfidf_matrix, tfidf_vectorizer = compute_tfidf(texts_processed)
+BASE_CLASSIFIER = EnhancedActiveLearning(doc_topics, tfidf_matrix, combine_weight=0.5,tfidf_vectorizer=tfidf_vectorizer)
 print(f"✓ Base classifier loaded")
 
 # User sessions
 USERS = {}
 
 # LLM
-LLM_API_KEY = "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"
+LLM_API_KEY = "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"
 llm_suggester = LLMSuggestionsOpenRouter(LLM_API_KEY, model="meta-llama/llama-3.1-8b-instruct")
 
 # ============= ENDPOINTS =============
@@ -39,7 +40,8 @@ def create_user():
         user_id = str(uuid.uuid4())[:8]
         USERS[user_id] = {
             'classifier': copy.deepcopy(BASE_CLASSIFIER),
-            'documents': texts,
+            'documents_processed': texts_processed,
+            'documents_raw': texts_raw,
             'labeled_count': 0,
             'labeled_history': [],  # Track labeled docs
             'skipped': set(),       # Track skipped docs
@@ -48,7 +50,7 @@ def create_user():
         return jsonify({
             'status': 'success',
             'user_id': user_id,
-            'total_documents': len(texts)
+            'total_documents': len(texts_processed)
         }), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -62,8 +64,9 @@ def get_recommended_document():
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
         
         classifier = USERS[user_id]['classifier']
-        documents = USERS[user_id]['documents']
-        
+        # documents = USERS[user_id]['documents']
+        #-> hiện cho ng dùng raw
+        documents = USERS[user_id]['documents_raw']
         doc_id, entropy = classifier.recommend_document()
         
         # FIX: Convert numpy int64 to python int
@@ -72,8 +75,8 @@ def get_recommended_document():
         # Store current doc
         USERS[user_id]['current_doc_id'] = doc_id
         
-        doc_text = documents[doc_id] if isinstance(documents[doc_id], str) else documents[doc_id].get('text', '')
-        
+        # doc_text = documents[doc_id] if isinstance(documents[doc_id], str) else documents[doc_id].get('text', '')
+        doc_text = documents[doc_id] #raw
         return jsonify({
             'status': 'success',
             'doc_id': doc_id,
@@ -93,7 +96,7 @@ def get_document_information():
         if user_id not in USERS:
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
         
-        doc_text = USERS[user_id]['documents'][doc_id]
+        doc_text = USERS[user_id]['documents_raw'][doc_id]
         if isinstance(doc_text, dict):
             doc_text = doc_text.get('text', '')
         
@@ -107,7 +110,7 @@ def get_document_information():
         return jsonify({
             'status': 'success',
             'doc_id': doc_id,
-            'text': doc_text[:100],  # Return truncated text preview if needed
+            'text': doc_text[:300],  # Return truncated text preview if needed
             'summary': summary,
             'llm_labels': llm_labels,
             'suggestions': [{'label': l, 'confidence': c} for l, c in suggestions]
@@ -179,7 +182,7 @@ def back_document():
     USERS[user_id]['current_doc_id'] = doc_id
 
     # Return doc content
-    doc_text = USERS[user_id]['documents'][doc_id]
+    doc_text = USERS[user_id]['documents_raw'][doc_id]
     if isinstance(doc_text, dict):
         doc_text = doc_text.get("text", "")
 
@@ -210,6 +213,25 @@ def search_documents():
         'results': results
     })
 
+# @app.route('/documents', methods=['GET'])
+# def get_documents():
+#     user_id = request.args.get('user_id')
+
+#     if user_id is None or user_id not in USERS:
+#         return jsonify({
+#             "status": "error",
+#             "message": "Invalid or missing user_id"
+#         }), 400
+
+#     documents = USERS[user_id]['documents_raw']
+
+#     return jsonify({
+#         "status": "success",
+#         "documents": [
+#             {"id": i, "text": documents[i] if isinstance(documents[i], str) else documents[i].get('text', '')}
+#             for i in range(len(documents))
+#         ]
+#     })
 @app.route('/documents', methods=['GET'])
 def get_documents():
     user_id = request.args.get('user_id')
@@ -220,17 +242,20 @@ def get_documents():
             "message": "Invalid or missing user_id"
         }), 400
 
-    documents = USERS[user_id]['documents']
+    documents = USERS[user_id]['documents_raw']   # ✅ DÙNG RAW
 
     return jsonify({
         "status": "success",
         "documents": [
-            {"id": i, "text": documents[i] if isinstance(documents[i], str) else documents[i].get('text', '')}
+            {
+                "id": i,
+                "text": documents[i]
+            }
             for i in range(len(documents))
         ]
     })
 
-@app.route('/get_topic_list', methods=['GET'])
+@app.route('/get_topic_list', methods=['GET', 'OPTIONS'])
 def get_topic_list():
     """Danh sách các topic đã được user tạo + docs thuộc topic"""
     try:
@@ -240,27 +265,49 @@ def get_topic_list():
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
         
         classifier = USERS[user_id]['classifier']
+        num_docs = len(USERS[user_id]['documents_processed'])
 
-        # list topic names
+        # 1. Danh sách các chủ đề đã được người dùng tạo (nhãn thủ công)
         topics = list(classifier.classes)
-
-        # count docs per topic
-        topic_counts = {}
-        for label in classifier.labeled_y:
-            topic_counts[label] = topic_counts.get(label, 0) + 1
-
-        # map topic -> list[doc_id]
-        topic_docs = {}
-        # Sử dụng classifier.user_labels thay vì classifier.labeled_docs nếu attribute class là user_labels
-        labels_map = getattr(classifier, 'user_labels', {}) 
+        topic_docs = {topic: [] for topic in topics} # Lưu doc_ids thuộc topic
         
-        for doc_id, label in labels_map.items():
-            # FIX: Ensure doc_id is int
-            topic_docs.setdefault(label, []).append(int(doc_id))
+        # 2. Lấy các tài liệu đã được gán nhãn thủ công (User-labeled Docs)
+        labeled_docs_set = set(classifier.user_labels.keys())
+        for doc_id, labels in classifier.user_labels.items():
+            for lb in labels:               # duyệt từng nhãn con
+                if lb in topic_docs:
+                    topic_docs[lb].append(int(doc_id))
+
+
+        # 3. Phân loại tự động các tài liệu còn lại (Auto-classified Docs)
+        # Chỉ chạy nếu có đủ >= 2 classes để huấn luyện bộ phân loại
+        if len(topics) >= 2:
+            # Điều chỉnh ngưỡng này để kiểm soát độ "tự tin"
+            CONFIDENCE_THRESHOLD = 0.9  # Ví dụ: chỉ chấp nhận dự đoán > 80%
+
+            for doc_id in range(num_docs):
+                # Bỏ qua tài liệu đã được người dùng gán nhãn thủ công
+                if doc_id in labeled_docs_set:
+                    continue
+                
+                # Lấy dự đoán hàng đầu
+                preds, _, confidence = classifier.get_predictions(doc_id, top_k=1)
+                
+                if preds:
+                    label, prob = preds[0]
+                    # Chỉ gán tự động nếu dự đoán tự tin và là một trong các nhãn đã tạo
+                    if label in topic_docs and prob >= CONFIDENCE_THRESHOLD:
+                        topic_docs[label].append(int(doc_id))
+
+        # 4. Tính lại số lượng
+        topic_counts = {topic: len(docs) for topic, docs in topic_docs.items()}
+
+        # 5. Định dạng lại kết quả (sắp xếp theo số lượng doc giảm dần)
+        sorted_topics = sorted(topics, key=lambda t: topic_counts.get(t, 0), reverse=True)
 
         return jsonify({
             'status': 'success',
-            'topics': topics,
+            'topics': sorted_topics,
             'topic_counts': topic_counts,
             'topic_docs': topic_docs,
             'total_topics': len(topics)
@@ -283,14 +330,28 @@ def display():
         # Get all predictions
         predictions = {}
         if len(classifier.classes) >= 2:
-            for doc_id in range(len(USERS[user_id]['documents'])):
-                preds, _ = classifier.get_predictions(doc_id, top_k=1)
-                if preds:
-                    # FIX: Ensure values are python native types
-                    predictions[int(doc_id)] = (preds[0][0], float(preds[0][1]))
+            UNCERTAINTY_THRESHOLD = 0.9   # THRESHOLD bạn chỉnh mức này tùy ý
+            
+            for doc_id in range(len(USERS[user_id]['documents_processed'])):
+                preds, _, confidence = classifier.get_predictions(doc_id, top_k=1)
+                
+                if not preds:
+                    continue
+
+                label, prob = preds[0]
+
+                # chỉ hiện tài liệu không chắc chắn
+                # LOẠI doc đã gán nhãn
+                # Sử dụng confidence (giá trị thứ 3) để so sánh với ngưỡng, đảm bảo đồng nhất
+                if confidence < UNCERTAINTY_THRESHOLD and doc_id not in classifier.user_labels:
+                    predictions[int(doc_id)] = (label, confidence)
+
+                # if preds:
+                #     # FIX: Ensure values are python native types
+                #     predictions[int(doc_id)] = (preds[0][0], float(preds[0][1]))
         
         # Metrics
-        ground_truth = np.random.randint(0, max(2, len(classifier.classes)), len(USERS[user_id]['documents']))
+        ground_truth = np.random.randint(0, max(2, len(classifier.classes)), len(USERS[user_id]['documents_processed']))
         purity, ari, nmi = classifier.compute_metrics(ground_truth)
         
         return jsonify({
@@ -299,6 +360,9 @@ def display():
             'topics': list(classifier.classes),
             'topic_count': len(classifier.classes),
             'predictions': predictions,
+            # 👇 thêm 2 dòng này
+            'user_labels': classifier.user_labels,
+            'labeled_docs': [int(i) for i in classifier.user_labels.keys()],
             'metrics': {
                 'purity': purity,
                 'ari': ari,
@@ -317,7 +381,7 @@ def get_topic_summary():
         return jsonify({"status": "error", "message": "User not found"}), 404
 
     classifier = USERS[user_id]['classifier']
-    docs = USERS[user_id]['documents']
+    docs = USERS[user_id]['documents_raw']
 
     # list docs in topic
     labels_map = getattr(classifier, 'user_labels', {}) 
@@ -338,4 +402,4 @@ def get_topic_summary():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)

@@ -384,8 +384,7 @@ async function submitLabel() {
     }
 
     showLoading("Training classifier...");
-    
-    // /label_document
+
     const res = await apiCall('/label_document', 'POST', {
         user_id: STATE.userId,
         doc_id: STATE.currentDocId,
@@ -393,15 +392,16 @@ async function submitLabel() {
     });
 
     if (res) {
-        STATE.labeledHistory.add(STATE.currentDocId);
-        
-        // Auto load next
+        // ❌ bỏ dòng tự add, để backend là nguồn truth
+        // STATE.labeledHistory.add(STATE.currentDocId);
+
         await loadNextRecommended();
-        
-        // Refresh right panel (topics + table)
-        refreshRightPanel(); 
+        await refreshRightPanel();
     }
+
+    hideLoading();
 }
+
 
 async function prevDocument() {
     showLoading("Undoing last action...");
@@ -481,11 +481,20 @@ async function renderTable(filterResults = null) {
     // Note: display returns predictions for ALL docs usually
     const displayRes = await apiCall('/display', 'GET', { user_id: STATE.userId });
     if (displayRes) {
-        STATE.predictions = displayRes.predictions;
-        // Update Stats
-        const m = displayRes.metrics;
-        $('tableStats').innerText = `Metrics - Purity: ${m.purity?.toFixed(3) || 'N/A'} | ARI: ${m.ari?.toFixed(3) || 'N/A'}`;
+        STATE.predictions = displayRes.predictions || {};
+
+        // ✅ labeled_docs là LIST, có thể undefined nếu backend lỗi
+        STATE.labeledHistory = new Set(
+            (displayRes.labeled_docs || []).map(id => parseInt(id))
+        );
+
+        const m = displayRes.metrics || {};
+        const purity = (m.purity != null) ? m.purity.toFixed(3) : 'N/A';
+        const ari    = (m.ari    != null) ? m.ari.toFixed(3)    : 'N/A';
+        $('tableStats').innerText = `Metrics - Purity: ${purity} | ARI: ${ari}`;
     }
+
+
 
     // 3. Determine rows to show
     let rowsToShow = [];
@@ -496,7 +505,14 @@ async function renderTable(filterResults = null) {
         rowsToShow = STATE.allDocs.filter(d => ids.has(d.id));
     } else {
         // Show all (or slice for performance if needed, showing first 100)
-        rowsToShow = STATE.allDocs; 
+        // Lọc: chỉ hiện tài liệu predicted là "không chắc chắn" + chưa labeled
+        rowsToShow = STATE.allDocs.filter(doc => {
+            const pred = STATE.predictions[doc.id];
+            const isUncertain = pred !== undefined;   // backend chỉ gửi uncertain
+            const notLabeledByUser = !STATE.labeledHistory.has(doc.id);  // ✓ FIX: sử dụng labeledHistory từ backend
+            return isUncertain && notLabeledByUser;  // ✓ Chỉ hiện nếu uncertain AND chưa labeled
+        });
+
     }
 
     // 4. Render
@@ -513,9 +529,11 @@ async function renderTable(filterResults = null) {
 
         // Prediction logic
         let predHtml = '<span class="tag">-</span>';
-        const pred = STATE.predictions[doc.id]; // [label, score]
+        const pred = STATE.predictions[doc.id]; // ✓ FIX: pred là object {predicted_label, confidence, reason}
         if (pred) {
-            predHtml = `<span class="tag pred" title="Score: ${pred[1].toFixed(2)}">${pred[0]}</span>`;
+            const conf = typeof pred.confidence === 'number' ? pred.confidence : pred[1];
+            const label = pred.predicted_label || pred[0];
+            predHtml = `<span class="tag pred" title="Confidence: ${(conf*100).toFixed(0)}%">${label}</span>`;
         }
 
         tr.innerHTML = `

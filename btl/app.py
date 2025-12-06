@@ -28,7 +28,7 @@ print(f"✓ Base classifier loaded")
 USERS = {}
 
 # LLM
-LLM_API_KEY = "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"
+LLM_API_KEY = "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"
 llm_suggester = LLMSuggestionsOpenRouter(LLM_API_KEY, model="meta-llama/llama-3.1-8b-instruct")
 
 # ============= ENDPOINTS =============
