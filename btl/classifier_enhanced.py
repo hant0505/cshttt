@@ -111,9 +111,7 @@ class EnhancedActiveLearning:
                 doc_id = random.randint(0, self.num_docs - 1)
                 if doc_id not in self.labeled_doc_ids:
                     return doc_id, -1
-        else:
-            # Entropy uncertainty sampling
-            
+        else:            
             # Predict probabilities for all documents
             probas = self.classifier.predict_proba(self.features_scaled)
             
@@ -177,28 +175,8 @@ class EnhancedActiveLearning:
         )
 
         self.classifier = OneVsRestClassifier(sgd_clf)
-        # Fit full accumulated dataset (Re-training step)
         self.classifier.fit(x_train, y_train)
-    
-    # def get_predictions(self, doc_id, top_k=3):
-    #     """Get top-k predictions and probabilities for a document."""
-    #     if len(self.classes) < 2 or self.classifier is None:
-    #         return [("Not enough labeled classes", 0.0)], list(self.classes), 0.0
-        
-    #     try:
-    #         probas = self.classifier.predict_proba(self.features_scaled[doc_id:doc_id+1])[0]
-    #     except Exception as e:
-    #         print(f"Prediction error: {e}")
-    #         return [("Prediction failed", 0.0)], list(self.classes), 0.0
 
-    #     sorted_idx = np.argsort(probas)[::-1]
-    #     predictions = [(self.classifier.classes_[i], float(probas[i])) 
-    #                for i in sorted_idx if probas[i] > 0]
-
-    #     top_predictions = predictions[:top_k]
-    #     confidence = float(max(probas)) if probas.size > 0 else 0.0
-
-    #     return top_predictions, list(self.classes), confidence
     def get_predictions(self, doc_id, top_k=3):
         """Return top-k labels + probability for multi-label classification."""
         if self.classifier is None:

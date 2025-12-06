@@ -172,7 +172,6 @@ def back_document():
     doc_id = last['doc_id']
     label = last['label']
 
-    # Undo: rebuild classifier from scratch
     classifier = copy.deepcopy(BASE_CLASSIFIER)
     for h in history:
         classifier.label_document(h["doc_id"], h["label"])
@@ -181,14 +180,13 @@ def back_document():
     USERS[user_id]['labeled_count'] -= 1
     USERS[user_id]['current_doc_id'] = doc_id
 
-    # Return doc content
     doc_text = USERS[user_id]['documents_raw'][doc_id]
     if isinstance(doc_text, dict):
         doc_text = doc_text.get("text", "")
 
     return jsonify({
         "status": "success",
-        "doc_id": int(doc_id), # Ensure int
+        "doc_id": int(doc_id), 
         "text": doc_text
     })
 
@@ -213,25 +211,6 @@ def search_documents():
         'results': results
     })
 
-# @app.route('/documents', methods=['GET'])
-# def get_documents():
-#     user_id = request.args.get('user_id')
-
-#     if user_id is None or user_id not in USERS:
-#         return jsonify({
-#             "status": "error",
-#             "message": "Invalid or missing user_id"
-#         }), 400
-
-#     documents = USERS[user_id]['documents_raw']
-
-#     return jsonify({
-#         "status": "success",
-#         "documents": [
-#             {"id": i, "text": documents[i] if isinstance(documents[i], str) else documents[i].get('text', '')}
-#             for i in range(len(documents))
-#         ]
-#     })
 @app.route('/documents', methods=['GET'])
 def get_documents():
     user_id = request.args.get('user_id')
@@ -242,7 +221,7 @@ def get_documents():
             "message": "Invalid or missing user_id"
         }), 400
 
-    documents = USERS[user_id]['documents_raw']   # ✅ DÙNG RAW
+    documents = USERS[user_id]['documents_raw']  
 
     return jsonify({
         "status": "success",
@@ -274,23 +253,16 @@ def get_topic_list():
         # 2. Lấy các tài liệu đã được gán nhãn thủ công (User-labeled Docs)
         labeled_docs_set = set(classifier.user_labels.keys())
         for doc_id, labels in classifier.user_labels.items():
-            for lb in labels:               # duyệt từng nhãn con
+            for lb in labels:             
                 if lb in topic_docs:
                     topic_docs[lb].append(int(doc_id))
 
-
-        # 3. Phân loại tự động các tài liệu còn lại (Auto-classified Docs)
-        # Chỉ chạy nếu có đủ >= 2 classes để huấn luyện bộ phân loại
         if len(topics) >= 2:
-            # Điều chỉnh ngưỡng này để kiểm soát độ "tự tin"
-            CONFIDENCE_THRESHOLD = 0.9  # Ví dụ: chỉ chấp nhận dự đoán > 80%
+            CONFIDENCE_THRESHOLD = 0.9  
 
             for doc_id in range(num_docs):
-                # Bỏ qua tài liệu đã được người dùng gán nhãn thủ công
                 if doc_id in labeled_docs_set:
                     continue
-                
-                # Lấy dự đoán hàng đầu
                 preds, _, confidence = classifier.get_predictions(doc_id, top_k=1)
                 
                 if preds:
@@ -298,11 +270,7 @@ def get_topic_list():
                     # Chỉ gán tự động nếu dự đoán tự tin và là một trong các nhãn đã tạo
                     if label in topic_docs and prob >= CONFIDENCE_THRESHOLD:
                         topic_docs[label].append(int(doc_id))
-
-        # 4. Tính lại số lượng
         topic_counts = {topic: len(docs) for topic, docs in topic_docs.items()}
-
-        # 5. Định dạng lại kết quả (sắp xếp theo số lượng doc giảm dần)
         sorted_topics = sorted(topics, key=lambda t: topic_counts.get(t, 0), reverse=True)
 
         return jsonify({
@@ -339,17 +307,8 @@ def display():
                     continue
 
                 label, prob = preds[0]
-
-                # chỉ hiện tài liệu không chắc chắn
-                # LOẠI doc đã gán nhãn
-                # Sử dụng confidence (giá trị thứ 3) để so sánh với ngưỡng, đảm bảo đồng nhất
                 if confidence < UNCERTAINTY_THRESHOLD and doc_id not in classifier.user_labels:
                     predictions[int(doc_id)] = (label, confidence)
-
-                # if preds:
-                #     # FIX: Ensure values are python native types
-                #     predictions[int(doc_id)] = (preds[0][0], float(preds[0][1]))
-        
         # Metrics
         ground_truth = np.random.randint(0, max(2, len(classifier.classes)), len(USERS[user_id]['documents_processed']))
         purity, ari, nmi = classifier.compute_metrics(ground_truth)
@@ -360,7 +319,6 @@ def display():
             'topics': list(classifier.classes),
             'topic_count': len(classifier.classes),
             'predictions': predictions,
-            # 👇 thêm 2 dòng này
             'user_labels': classifier.user_labels,
             'labeled_docs': [int(i) for i in classifier.user_labels.keys()],
             'metrics': {
