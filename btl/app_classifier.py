@@ -28,7 +28,7 @@ print(f"✓ Base classifier loaded")
 USERS = {}
 
 # LLM
-LLM_API_KEY = "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"
+LLM_API_KEY = "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" #api_key free dùng được ngắn hạn //
 llm_suggester = LLMSuggestionsOpenRouter(LLM_API_KEY, model="meta-llama/llama-3.1-8b-instruct")
 
 # ============= ENDPOINTS =============
@@ -360,4 +360,5 @@ def get_topic_summary():
     })
 
 if __name__ == '__main__':
+
     app.run(debug=False, port=5000)
